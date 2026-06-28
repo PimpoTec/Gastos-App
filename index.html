@@ -175,7 +175,7 @@
     <!-- Panel Gastos -->
     <div class="panel active" id="panel-gastos">
       <div class="stats-grid">
-        <div class="stat-card"><div class="lbl">Este mes</div><div class="val acc" id="s-mes">$0</div></div>
+        <div class="stat-card"><div class="lbl">Este mes (con subs)</div><div class="val acc" id="s-mes">$0</div></div>
         <div class="stat-card"><div class="lbl">Mayor gasto</div><div class="val dng" id="s-max">$0</div></div>
         <div class="stat-card"><div class="lbl">Total</div><div class="val" id="s-total">$0</div></div>
         <div class="stat-card"><div class="lbl">Registros</div><div class="val" id="s-count">0</div></div>
@@ -458,13 +458,15 @@ function updateHeader() {
 function renderGastos() {
   const hoy = new Date();
   const mesG = gastos.filter(g=>{ const d=new Date(g.fecha); return d.getMonth()===hoy.getMonth()&&d.getFullYear()===hoy.getFullYear(); });
-  document.getElementById('s-mes').textContent   = fmt(mesG.reduce((a,g)=>a+g.monto,0));
+  const totalMesSubs = subs.reduce((a,s)=>a+s.monto,0);
+  const totalMes = mesG.reduce((a,g)=>a+g.monto,0) + totalMesSubs;
+  document.getElementById('s-mes').textContent   = fmt(totalMes);
   document.getElementById('s-total').textContent = fmt(gastos.reduce((a,g)=>a+g.monto,0));
   document.getElementById('s-count').textContent = gastos.length;
   document.getElementById('s-max').textContent   = fmt(gastos.length ? Math.max(...gastos.map(g=>g.monto)) : 0);
 
-  // Desglose por pago
-  renderPagoBreakdown('pago-breakdown','pago-lbl', gastos);
+  // Desglose por pago (gastos + suscripciones combinados)
+  renderPagoBreakdown('pago-breakdown','pago-lbl', gastos, subs);
 
   // Filtros rápidos
   const filtrosEl = document.getElementById('filtros');
@@ -506,7 +508,7 @@ function renderSubs() {
   document.getElementById('ss-mes').textContent   = fmt(total);
   document.getElementById('ss-anual').textContent = fmt(total*12);
 
-  renderPagoBreakdown('sub-pago-breakdown','sub-pago-lbl', subs);
+  renderPagoBreakdown('sub-pago-breakdown','sub-pago-lbl', subs, []);
 
   if(subs.length) {
     const hoy = new Date().getDate();
@@ -545,24 +547,45 @@ function renderSubs() {
   }).join('');
 }
 
-function renderPagoBreakdown(containerId, titleId, items) {
+function renderPagoBreakdown(containerId, titleId, items, extraItems) {
   const c = document.getElementById(containerId);
   const t = document.getElementById(titleId);
-  if(!items.length){ c.innerHTML=''; t.style.display='none'; return; }
+  const combined = [...(items||[]), ...(extraItems||[])];
+  if(!combined.length){ c.innerHTML=''; t.style.display='none'; return; }
   t.style.display='';
-  const totals={}, counts={};
-  items.forEach(i=>{ totals[i.pago]=(totals[i.pago]||0)+i.monto; counts[i.pago]=(counts[i.pago]||0)+1; });
+
+  // Totales separados por fuente
+  const totGastos={}, totSubs={}, counts={};
+  (items||[]).forEach(i=>{
+    totGastos[i.pago]=(totGastos[i.pago]||0)+i.monto;
+    counts[i.pago]=(counts[i.pago]||0)+1;
+  });
+  (extraItems||[]).forEach(i=>{
+    totSubs[i.pago]=(totSubs[i.pago]||0)+i.monto;
+    counts[i.pago]=(counts[i.pago]||0)+1;
+  });
+
+  // Total combinado por pago
+  const totals={};
+  [...Object.keys(totGastos), ...Object.keys(totSubs)].forEach(pid=>{
+    totals[pid]=(totGastos[pid]||0)+(totSubs[pid]||0);
+  });
+
   const max = Math.max(...Object.values(totals));
   const sorted = Object.entries(totals).sort((a,b)=>b[1]-a[1]);
   const topKey = sorted[0][0];
+
   c.innerHTML = sorted.map(([pid, total])=>{
     const p = getPago(pid);
     const pct = Math.round((total/max)*100);
+    const gPart = totGastos[pid] ? `<span style="color:var(--muted)">Gastos ${fmt(totGastos[pid])}</span>` : '';
+    const sPart = totSubs[pid]   ? `<span style="color:var(--muted)">Suscripciones ${fmt(totSubs[pid])}</span>` : '';
+    const detail = [gPart, sPart].filter(Boolean).join(' · ');
     return `<div class="pago-row ${pid===topKey?'top-pago':''}">
       <div class="ico" style="background:${p.bg}">${p.ico}</div>
       <div class="info">
         <div class="name">${p.label}</div>
-        <div class="count">${counts[pid]} movimiento${counts[pid]!==1?'s':''}</div>
+        <div class="count" style="display:flex;gap:6px;flex-wrap:wrap">${detail}</div>
         <div class="bar-wrap"><div class="bar" style="width:${pct}%;background:${p.color}"></div></div>
       </div>
       <div class="total" style="color:${p.color}">${fmt(total)}</div>
