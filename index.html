@@ -163,7 +163,7 @@
   </nav>
 </div>
 
-<button class="fab" onclick="openModalGasto()">
+<button class="fab" onclick="abrirModalCorrecto()">
   <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
 </button>
 
@@ -304,6 +304,14 @@ function switchTab(tab){
   closeModals();
 }
 
+function abrirModalCorrecto() {
+  if (tabActual === 'subs') {
+    openModalSub();
+  } else {
+    openModalGasto();
+  }
+}
+
 function openModalGasto(id = null){
   renderChips('g-pago-chips',PAGOS,selPagoGasto,'gasto');
   renderCatChips('g-cat-chips',CATS_GASTO,selCatGasto,'gasto');
@@ -437,6 +445,21 @@ function submitGasto(){
 function eliminarGastoActual() {
     const id = document.getElementById('g-id').value;
     if(id) { gastos = gastos.filter(g => g.id != id); save(); closeModals(); renderAll(); }
+}
+
+function submitSub(){
+  const nombre=document.getElementById('s-nombre').value.trim();
+  const monto=parseFloat(document.getElementById('s-monto').value);
+  const dia=parseInt(document.getElementById('s-dia').value);
+  if(!nombre){err('s-nombre');return;}
+  if(isNaN(monto)||monto<=0){err('s-monto');return;}
+  if(isNaN(dia)||dia<1||dia>31){err('s-dia');return;}
+  subs.push({id:Date.now(),nombre,monto,pago:selPagoSub,dia,cat:selCatSub});
+  save(); closeModals();
+  document.getElementById('s-nombre').value='';
+  document.getElementById('s-monto').value='';
+  document.getElementById('s-dia').value='';
+  renderAll();
 }
 
 function delSub(id) { subs=subs.filter(s=>s.id!==id); save(); renderAll(); }
