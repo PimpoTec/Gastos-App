@@ -1,4 +1,4 @@
-const CACHE = 'gastos-v2';
+const CACHE = 'gastos-v1';
 const ASSETS = ['/', '/index.html', '/manifest.json'];
 
 self.addEventListener('install', e => {
@@ -6,12 +6,11 @@ self.addEventListener('install', e => {
   self.skipWaiting();
 });
 
-self.addEventListener('push', e => {
-  const data = e.data.json();
-  self.registration.showNotification(data.title, {
-    body: data.body,
-    icon: '/icon/icon-192.png'
-  });
+self.addEventListener('activate', e => {
+  e.waitUntil(caches.keys().then(keys =>
+    Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
+  ));
+  self.clients.claim();
 });
 
 self.addEventListener('fetch', e => {
