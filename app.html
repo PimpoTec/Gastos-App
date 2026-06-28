@@ -595,6 +595,84 @@ function renderSubs(){
   }).join('');
 }
 
+// ── OneSignal ─────────────────────────────────────────
+const OS_APP_ID = '2ac91baf-0217-454f-b2e9-8c7de7464d61';
+const EDGE_URL  = 'https://rujgpkiuhofndbmcntuj.supabase.co/functions/v1/enviar-notificacion';
+
+async function initOneSignal() {
+  if (!('Notification' in window)) return;
+  try {
+    await window.OneSignalDeferred.push(async (os) => {
+      await os.init({
+        appId: OS_APP_ID,
+        serviceWorkerParam: { scope: '/' },
+        promptOptions: { slidedown: { prompts: [{
+          type: 'push',
+          autoPrompt: true,
+          text: { actionMessage: '¿Querés recibir alertas de vencimientos?', acceptButton: 'Sí', cancelButton: 'No' },
+          delay: { pageViews: 1, timeDelay: 3 }
+        }] } }
+      });
+      // Guardar player_id en Supabase
+      const playerId = await os.User.PushSubscription.id;
+      if (playerId && currentUser) {
+        await sb.from('dispositivos').upsert({ user_id: currentUser.id, player_id: playerId }, { onConflict: 'player_id' });
+      }
+    });
+  } catch(e) { console.log('OneSignal:', e); }
+}
+
+async function enviarNotificacion(titulo, mensaje) {
+  try {
+    // Obtener todos los player_ids del usuario
+    const { data } = await sb.from('dispositivos').select('player_id').eq('user_id', currentUser.id);
+    if (!data || !data.length) return;
+    const player_ids = data.map(d => d.player_id);
+    const { data: { session } } = await sb.auth.getSession();
+    await fetch(EDGE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+      body: JSON.stringify({ titulo, mensaje, player_ids })
+    });
+  } catch(e) { console.log('Notif error:', e); }
+}
+
+// Revisar vencimientos y notificar si corresponde
+async function checkVencimientos() {
+  const hoy = new Date();
+  const alertas = [];
+
+  // Cierres de tarjeta en los próximos 2 días
+  PAGOS.filter(p => p.esTarjeta && cierres[p.id]).forEach(p => {
+    const fCierre = proximoCierreFecha(cierres[p.id]);
+    const diff = Math.ceil((fCierre - hoy) / (1000*60*60*24));
+    if (diff >= 0 && diff <= 2) {
+      const total = getGastosPeriodoActual(p.id, gastos);
+      alertas.push(`${p.ico} ${p.label} cierra en ${diff===0?'hoy':diff+' días'} — ${fmt(total)}`);
+    }
+  });
+
+  // Suscripciones en los próximos 2 días
+  subs.forEach(s => {
+    let fSub = new Date(hoy.getFullYear(), hoy.getMonth(), s.dia);
+    if (hoy.getDate() > s.dia) fSub.setMonth(fSub.getMonth()+1);
+    const diff = Math.ceil((fSub - hoy) / (1000*60*60*24));
+    if (diff >= 0 && diff <= 2) {
+      alertas.push(`🔄 ${s.nombre} debita en ${diff===0?'hoy':diff+' días'} — ${fmt(s.monto)}`);
+    }
+  });
+
+  if (alertas.length > 0) {
+    // Solo notificar una vez por día — guardar última notif en localStorage
+    const hoyStr = hoy.toISOString().split('T')[0];
+    const ultimaNotif = localStorage.getItem('ultima_notif');
+    if (ultimaNotif !== hoyStr) {
+      localStorage.setItem('ultima_notif', hoyStr);
+      await enviarNotificacion('⚠️ Vencimientos próximos', alertas.join('\n'));
+    }
+  }
+}
+
 // ── Init ─────────────────────────────────────────────
 (async()=>{
   showLoading('Verificando sesión...');
@@ -606,8 +684,12 @@ function renderSubs(){
   hideLoading();
   updateHeader();
   renderAll();
+  // Inicializar notificaciones
+  await initOneSignal();
+  await checkVencimientos();
 })();
 </script>
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
 <script>if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}</script>
 </body>
 </html>
