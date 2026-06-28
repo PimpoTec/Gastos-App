@@ -68,7 +68,7 @@
     /* Formulario */
     .field { margin-bottom: 14px; }
     .field label { display: block; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; font-weight: 500; }
-    .amount-input { font-size: 36px; font-weight: 700; width: 100%; background: var(--card); border: 1.5px solid var(--border); border-radius: var(--radius); padding: 12px 16px; color: var(--text); text-align: right; letter-spacing: -1px; outline: none; transition: border-color .15s; }
+    .amount-input { font-size: 36px; font-weight: 700; width: 100%; background: var(--card); border: 1.5px solid var(--border); border-radius: var(--radius); padding: 12px 16px; color: var(--text); text-align: left; letter-spacing: -1px; outline: none; transition: border-color .15s; }
     .amount-input:focus { border-color: var(--accent); }
     input[type=text], input[type=date], input[type=number], select, textarea {
       width: 100%; background: var(--card); border: 1.5px solid var(--border); border-radius: var(--radius-sm);
@@ -309,10 +309,9 @@ const CATS_GASTO = [
   {id:'comida',label:'Comida',ico:'🍔',bg:'#FAC775'},
   {id:'transporte',label:'Transporte',ico:'🚗',bg:'#85B7EB'},
   {id:'servicios',label:'Servicios',ico:'💡',bg:'#97C459'},
-  {id:'salud',label:'Salud',ico:'💊',bg:'#F09595'},
-  {id:'entrete',label:'Entret.',ico:'🎬',bg:'#AFA9EC'},
+  {id:'vuelo',label:'Vuelo',ico:'✈️',bg:'#5DCAA5'},
+  {id:'trabajo',label:'Gasto Trabajo',ico:'💼',bg:'#AFA9EC'},
   {id:'ropa',label:'Ropa',ico:'👕',bg:'#F0997B'},
-  {id:'educacion',label:'Educación',ico:'📚',bg:'#5DCAA5'},
   {id:'otros',label:'Otros',ico:'📦',bg:'#B4B2A9'},
 ];
 const CATS_SUB = [
