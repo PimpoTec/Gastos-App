@@ -280,6 +280,7 @@ function proximoCierreFecha(diaCierre, dHoy = new Date()) {
 function calcularCuotaActual(fechaCompra, diaCierre) {
     const fCompra = new Date(fechaCompra + 'T00:00:00');
     const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0); // Eliminamos las horas para que el cálculo sea exacto
     let cierresPasados = 0;
     
     let proxCierreDespuesDeCompra = new Date(fCompra.getFullYear(), fCompra.getMonth(), diaCierre);
@@ -288,7 +289,9 @@ function calcularCuotaActual(fechaCompra, diaCierre) {
     }
     
     let evalDate = new Date(proxCierreDespuesDeCompra);
-    while (evalDate <= hoy) {
+    
+    // Cambiamos el <= por < para que la cuota avance recién al DÍA SIGUIENTE del cierre
+    while (evalDate < hoy) { 
         cierresPasados++;
         evalDate.setMonth(evalDate.getMonth() + 1);
     }
