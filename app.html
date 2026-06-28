@@ -600,26 +600,32 @@ const OS_APP_ID = '2ac91baf-0217-454f-b2e9-8c7de7464d61';
 const EDGE_URL  = 'https://rujgpkiuhofndbmcntuj.supabase.co/functions/v1/enviar-notificacion';
 
 async function initOneSignal() {
-  if (!('Notification' in window)) return;
+  if (!('Notification' in window) || !('serviceWorker' in navigator)) return;
   try {
-    await window.OneSignalDeferred.push(async (os) => {
-      await os.init({
-        appId: OS_APP_ID,
-        serviceWorkerParam: { scope: '/' },
-        promptOptions: { slidedown: { prompts: [{
-          type: 'push',
-          autoPrompt: true,
-          text: { actionMessage: '¿Querés recibir alertas de vencimientos?', acceptButton: 'Sí', cancelButton: 'No' },
-          delay: { pageViews: 1, timeDelay: 3 }
-        }] } }
-      });
-      // Guardar player_id en Supabase
-      const playerId = await os.User.PushSubscription.id;
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    window.OneSignalDeferred.push(async (os) => {
+      await os.init({ appId: OS_APP_ID });
+
+      // Pedir permiso explícitamente
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') return;
+
+      // Esperar a que se suscriba
+      await new Promise(r => setTimeout(r, 2000));
+
+      const playerId = os.User?.PushSubscription?.id;
+      console.log('OneSignal player_id:', playerId);
+
       if (playerId && currentUser) {
-        await sb.from('dispositivos').upsert({ user_id: currentUser.id, player_id: playerId }, { onConflict: 'player_id' });
+        const { error } = await sb.from('dispositivos').upsert(
+          { user_id: currentUser.id, player_id: playerId },
+          { onConflict: 'player_id' }
+        );
+        if (error) console.error('Error guardando player_id:', error);
+        else console.log('Dispositivo registrado OK');
       }
     });
-  } catch(e) { console.log('OneSignal:', e); }
+  } catch(e) { console.log('OneSignal error:', e); }
 }
 
 async function enviarNotificacion(titulo, mensaje) {
