@@ -800,13 +800,14 @@ async function submitIngreso(){
   const{error}=await sb.from('ingresos').upsert({id:newI.id,user_id:currentUser.id,monto:newI.monto,descripcion:newI.desc,cat:newI.cat,fecha:newI.fecha,moneda:newI.moneda});
   if(error){console.error('Error ingreso:',error);btn.disabled=false;btn.textContent='Guardar ingreso';return;}
   if(iId)ingresos=ingresos.map(x=>x.id==iId?newI:x);else ingresos.unshift(newI);
-  btn.disabled=false;closeModals();renderAll();
+  btn.disabled=false;btn.textContent='Guardar ingreso';
+  closeModals();renderAll();renderBalance();
 }
 async function eliminarIngresoActual(){
   const id=document.getElementById('i-id').value;if(!id)return;
   const btn=document.getElementById('btn-del-ingreso');btn.disabled=true;btn.textContent='Eliminando...';
   await dbDeleteIngreso(parseInt(id));ingresos=ingresos.filter(i=>i.id!=id);
-  btn.disabled=false;closeModals();renderBalance();
+  btn.disabled=false;closeModals();renderAll();renderBalance();
 }
 async function submitTarjeta(){
   const tId=document.getElementById('t-id').value;
