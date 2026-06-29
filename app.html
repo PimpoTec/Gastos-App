@@ -464,8 +464,15 @@ async function dbUpsertSub(s){await sb.from('suscripciones').upsert({id:s.id,use
 async function dbDeleteSub(id){await sb.from('suscripciones').delete().eq('id',id).eq('user_id',currentUser.id);}
 async function dbCargarIngresos(){
   const{data,error}=await sb.from('ingresos').select('*').eq('user_id',currentUser.id).order('fecha',{ascending:false});
-  if(error)return[];
-  return data.map(i=>({id:i.id,monto:parseFloat(i.monto),desc:i.descripcion,cat:i.cat,fecha:i.fecha,moneda:i.moneda||'ARS'}));
+  if(error){console.error('Error cargando ingresos:',error);return[];}
+  return data.map(i=>({
+    id:i.id,
+    monto:parseFloat(i.monto),
+    desc:i.descripcion||'',
+    cat:i.cat||'otro',
+    fecha:i.fecha||today(),
+    moneda:i.moneda||'ARS'
+  }));
 }
 async function dbUpsertIngreso(i){await sb.from('ingresos').upsert({id:i.id,user_id:currentUser.id,monto:i.monto,descripcion:i.desc,cat:i.cat,fecha:i.fecha,moneda:i.moneda||'ARS'});}
 async function dbDeleteIngreso(id){await sb.from('ingresos').delete().eq('id',id).eq('user_id',currentUser.id);}
