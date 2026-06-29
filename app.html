@@ -221,7 +221,7 @@
         <div class="sub" id="balance-sub">Cargando...</div>
         <div class="balance-row">
           <div class="balance-mini"><div class="lbl">💚 Ingresos</div><div class="val" id="balance-ing">$0</div></div>
-          <div class="balance-mini"><div class="lbl">🔴 Gastos</div><div class="val" id="balance-gas">$0</div></div>
+          <div class="balance-mini"><div class="lbl" id="balance-gas-label">🔴 Gastos</div><div class="val" id="balance-gas">$0</div></div>
         </div>
       </div>
       <div class="section-title">Por categoría de ingreso</div>
@@ -282,6 +282,20 @@
 <button class="fab" id="fab-btn" onclick="abrirModalCorrecto()">
   <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
 </button>
+
+<!-- Modal recordatorio ingresos -->
+<div class="modal-overlay" id="modal-recordatorio">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div style="text-align:center;margin-bottom:20px">
+      <div style="font-size:48px;margin-bottom:10px">💰</div>
+      <div class="modal-title" style="text-align:center">¡Nuevo mes!</div>
+      <p style="font-size:14px;color:var(--muted);line-height:1.6">Es el comienzo de <strong style="color:var(--text)" id="recordatorio-mes"></strong>.<br>¿Ya cargaste tus ingresos de este mes?</p>
+    </div>
+    <button class="btn-submit btn-success" onclick="irAIngresos()">💚 Cargar ingresos ahora</button>
+    <button class="btn-secondary" onclick="closeModals()">Lo hago después</button>
+  </div>
+</div>
 
 <!-- Modal Gasto -->
 <div class="modal-overlay" id="modal-gasto">
@@ -775,8 +789,9 @@ async function submitIngreso(){
   if(!desc){err('i-desc');return;}
   if(!fecha){err('i-fecha');return;}
   const btn=document.getElementById('btn-save-ingreso');btn.disabled=true;btn.textContent='Guardando...';
-  const newI={id:iId?parseInt(iId):Date.now(),monto,desc,cat:selCatIngreso,fecha,moneda};
-  await dbUpsertIngreso(newI);
+  const newI={id:iId?parseInt(iId):Date.now(),monto,desc,descripcion:desc,cat:selCatIngreso,fecha,moneda};
+  const{error}=await sb.from('ingresos').upsert({id:newI.id,user_id:currentUser.id,monto:newI.monto,descripcion:newI.desc,cat:newI.cat,fecha:newI.fecha,moneda:newI.moneda});
+  if(error){console.error('Error ingreso:',error);btn.disabled=false;btn.textContent='Guardar ingreso';return;}
   if(iId)ingresos=ingresos.map(x=>x.id==iId?newI:x);else ingresos.unshift(newI);
   btn.disabled=false;closeModals();renderAll();
 }
@@ -992,9 +1007,17 @@ function renderBalance(){
     const d=new Date(i.fecha+'T00:00:00');return d.getMonth()===hoy.getMonth()&&d.getFullYear()===hoy.getFullYear();
   });
   const totalIngresos=mesI.reduce((a,i)=>a+i.monto,0);
-  const mesG=getGastosMes();
+  // Solo descuentan del balance los gastos que NO son con tarjeta de crédito
+  // (los de tarjeta se pagan cuando llega el resumen, no en el momento)
+  const tarjetasCredito=new Set(tarjetas.filter(t=>t.esTarjeta).map(t=>String(t.id)));
+  const mesGSinTC=gastos.filter(g=>{
+    if(g.moneda==='USD')return false;
+    if(tarjetasCredito.has(String(g.pago)))return false; // excluir tarjetas de crédito
+    const d=new Date(g.fecha+'T00:00:00');
+    return d.getMonth()===hoy.getMonth()&&d.getFullYear()===hoy.getFullYear();
+  });
   const totalSubs=subs.filter(s=>s.moneda!=='USD').reduce((a,s)=>a+s.monto,0);
-  const totalGastos=mesG.reduce((a,g)=>a+g.monto,0)+totalSubs;
+  const totalGastos=mesGSinTC.reduce((a,g)=>a+g.monto,0)+totalSubs;
   const balance=totalIngresos-totalGastos;
   const hero=document.getElementById('balance-hero');
   hero.className='balance-hero '+(balance>0?'positivo':balance<0?'negativo':'neutro');
@@ -1002,6 +1025,7 @@ function renderBalance(){
   document.getElementById('balance-sub').textContent=balance>0?'Ahorro del mes ✨':balance<0?'Déficit del mes ⚠':'Sin movimientos';
   document.getElementById('balance-ing').textContent=fmt(totalIngresos);
   document.getElementById('balance-gas').textContent=fmt(totalGastos);
+  document.getElementById('balance-gas-label').textContent=tarjetasCredito.size>0?'🔴 Gastos (sin TC)':'🔴 Gastos';
 
   // Por categoría
   const porCat={};
@@ -1059,6 +1083,26 @@ function renderPerfil(){
   ||'<div style="font-size:13px;color:var(--muted);padding:8px 0 12px">Sin categorías</div>';
 }
 
+function irAIngresos(){closeModals();switchTab('balance');}
+
+function checkRecordatorioMes(){
+  const hoy=new Date();
+  const diaHoy=hoy.getDate();
+  if(diaHoy>5)return; // Solo mostrar los primeros 5 días del mes
+  const claveMes=`recordatorio_${hoy.getFullYear()}_${hoy.getMonth()}`;
+  if(localStorage.getItem(claveMes))return; // Ya se mostró este mes
+  // Ver si ya hay ingresos cargados este mes
+  const tieneIngresos=ingresos.some(i=>{
+    const d=new Date(i.fecha+'T00:00:00');
+    return d.getMonth()===hoy.getMonth()&&d.getFullYear()===hoy.getFullYear();
+  });
+  if(tieneIngresos)return; // Ya tiene ingresos, no molestar
+  localStorage.setItem(claveMes,'shown');
+  document.getElementById('recordatorio-mes').textContent=
+    hoy.toLocaleDateString('es-AR',{month:'long',year:'numeric'});
+  document.getElementById('modal-recordatorio').classList.add('open');
+}
+
 // ── Init ─────────────────────────────────────────────
 (async()=>{
   showLoading('Verificando sesión...');
@@ -1071,6 +1115,7 @@ function renderPerfil(){
   ]);
   hideLoading();
   renderAll();
+  setTimeout(checkRecordatorioMes, 800); // Pequeño delay para que cargue la UI primero
 })();
 </script>
 <script>if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}</script>
