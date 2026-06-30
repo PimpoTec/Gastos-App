@@ -227,6 +227,10 @@
 
     <!-- CUOTAS -->
     <div class="panel" id="panel-cuotas">
+      <div class="stats-grid">
+        <div class="stat-card"><div class="lbl">Total cuotas/mes</div><div class="val acc" id="cu-mes">$0</div></div>
+        <div class="stat-card"><div class="lbl">Próximo cobro</div><div class="val" id="cu-prox" style="font-size:14px;margin-top:5px">—</div></div>
+      </div>
       <div class="section-title">Cuotas activas</div>
       <div id="c-lista"></div>
     </div>
@@ -1022,6 +1026,32 @@ function renderCuotas(){
     const dc=cierres[g.pago]?.dia||31;const n=calcularCuotaActual(g.fecha,dc);
     return{...g,numCuota:n,t:getTarjeta(g.pago)};
   }).filter(g=>g.numCuota<=g.cuotas);
+
+  // Total que se paga este mes en cuotas (solo ARS)
+  const totalMes=activas.filter(g=>g.moneda!=='USD').reduce((a,g)=>a+g.monto,0);
+  document.getElementById('cu-mes').textContent=fmt(totalMes);
+
+  // Próximo cobro: la tarjeta con cuotas activas que cierra más pronto
+  const pagosConCuotas=[...new Set(activas.map(g=>g.pago))];
+  let proxCobro=null;
+  pagosConCuotas.forEach(pid=>{
+    const cfg=cierres[pid];
+    if(!cfg?.dia)return;
+    const fCierre=proximoCierreFecha(cfg.dia);
+    const diff=Math.ceil((fCierre-new Date())/(1000*60*60*24));
+    const t=getTarjeta(pid);
+    const montoEsteVencimiento=activas.filter(g=>g.pago===pid&&g.moneda!=='USD').reduce((a,g)=>a+g.monto,0);
+    if(!proxCobro||diff<proxCobro.diff){
+      proxCobro={diff,nombre:t.nombre,monto:montoEsteVencimiento};
+    }
+  });
+  if(proxCobro){
+    const txt=proxCobro.diff===0?'hoy':proxCobro.diff===1?'mañana':`en ${proxCobro.diff} días`;
+    document.getElementById('cu-prox').innerHTML=`${fmt(proxCobro.monto)}<br><span style="font-size:11px;color:var(--muted);font-weight:500">${proxCobro.nombre} · ${txt}</span>`;
+  }else{
+    document.getElementById('cu-prox').textContent='—';
+  }
+
   if(!activas.length){lista.innerHTML=`<div class="empty"><div class="ico">✅</div><p>Sin cuotas activas.</p></div>`;return;}
   lista.innerHTML=activas.map(g=>`<div class="gasto-item" onclick="openModalGasto(${g.id})"><div class="info"><div class="desc">${g.desc}</div><div class="meta"><span style="color:${g.t.color}">${g.t.icono} ${g.t.nombre}</span> · ${new Date(g.fecha+'T00:00:00').toLocaleDateString('es-AR',{month:'short',year:'numeric'})}</div></div><div class="right"><div class="amount" style="color:var(--accent)">${g.numCuota}/${g.cuotas}</div><div style="font-size:12px;color:var(--muted);margin-top:3px">${fmt(g.monto,g.moneda)}</div></div></div>`).join('');
 }
