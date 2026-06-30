@@ -1033,22 +1033,27 @@ function renderCuotas(){
   const totalMes=activas.filter(g=>g.moneda!=='USD').reduce((a,g)=>a+g.monto,0);
   document.getElementById('cu-mes').textContent=fmt(totalMes);
 
-  // Próximo cobro: para cada tarjeta, recalculamos qué cuotas van a estar
-  // activas en el PRÓXIMO cierre (no en el de hoy), así excluimos las que terminan
+  // Próximo cobro: el cierre actual (donde estamos parados) determina el monto
+  // de "este mes" (ya calculado arriba en totalMes). El "próximo cobro" es el
+  // cierre que viene DESPUÉS de ese, así que avanzamos un mes más desde el cierre actual.
   const pagosConCuotas=[...new Set(gastos.filter(g=>g.cuotas).map(g=>g.pago))];
   let proxCobro=null;
   pagosConCuotas.forEach(pid=>{
     const cfg=cierres[pid];
     if(!cfg?.dia)return;
-    const fCierre=proximoCierreFecha(cfg.dia);
-    const diff=Math.ceil((fCierre-new Date())/(1000*60*60*24));
+    const cierreActual=proximoCierreFecha(cfg.dia); // el cierre más próximo desde hoy
+    const cierreSiguiente=new Date(cierreActual);
+    cierreSiguiente.setMonth(cierreSiguiente.getMonth()+1); // el de después de ese
+    const diff=Math.ceil((cierreActual-new Date())/(1000*60*60*24));
     const t=getTarjeta(pid);
     // Para cada gasto en cuotas de esta tarjeta, calculamos el número de cuota
-    // que correspondería en la fecha del PRÓXIMO cierre
+    // que correspondería el día DESPUÉS del cierre actual (ya en el período siguiente)
+    const fechaPeriodoSiguiente=new Date(cierreActual);
+    fechaPeriodoSiguiente.setDate(fechaPeriodoSiguiente.getDate()+1);
     const gastosDeEstaTarjeta=gastos.filter(g=>g.cuotas&&g.pago===pid&&g.moneda!=='USD');
     const montoProximoCierre=gastosDeEstaTarjeta.reduce((a,g)=>{
-      const numCuotaEnProxCierre=calcularCuotaActual(g.fecha,cfg.dia,fCierre);
-      return numCuotaEnProxCierre<=g.cuotas?a+g.monto:a;
+      const numCuotaEnProxPeriodo=calcularCuotaActual(g.fecha,cfg.dia,fechaPeriodoSiguiente);
+      return numCuotaEnProxPeriodo<=g.cuotas?a+g.monto:a;
     },0);
     if(montoProximoCierre>0&&(!proxCobro||diff<proxCobro.diff)){
       proxCobro={diff,nombre:t.nombre,monto:montoProximoCierre};
