@@ -1054,7 +1054,10 @@ function renderBalance(){
     const d=new Date(g.fecha+'T00:00:00');
     return d.getMonth()===hoy.getMonth()&&d.getFullYear()===hoy.getFullYear();
   });
-  const totalSubs=subs.filter(s=>s.moneda!=='USD').reduce((a,s)=>a+s.monto,0);
+  const totalSubs=subs.filter(s=>{
+    if(s.moneda==='USD')return false;
+    return hoy.getDate()>=s.dia; // solo cuenta si el día de débito ya pasó este mes
+  }).reduce((a,s)=>a+s.monto,0);
   const totalGastos=mesGSinTC.reduce((a,g)=>a+g.monto,0)+totalSubs;
   const balance=totalIngresos-totalGastos;
   const hero=document.getElementById('balance-hero');
@@ -1064,6 +1067,24 @@ function renderBalance(){
   document.getElementById('balance-ing').textContent=fmt(totalIngresos);
   document.getElementById('balance-gas').textContent=fmt(totalGastos);
   document.getElementById('balance-gas-label').textContent=tarjetasCredito.size>0?'🔴 Gastos (sin TC)':'🔴 Gastos';
+
+  // Suscripciones que todavía no se debitaron este mes
+  const subsPendientes=subs.filter(s=>s.moneda!=='USD'&&hoy.getDate()<s.dia);
+  const totalPendiente=subsPendientes.reduce((a,s)=>a+s.monto,0);
+  let pendienteHtml=document.getElementById('balance-pendiente');
+  if(!pendienteHtml){
+    const div=document.createElement('div');
+    div.id='balance-pendiente';
+    div.style.cssText='font-size:12px;color:rgba(255,255,255,0.7);margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.12)';
+    hero.appendChild(div);
+    pendienteHtml=div;
+  }
+  if(subsPendientes.length){
+    pendienteHtml.innerHTML=`⏳ Aún no se descontó: <strong style="color:white">${fmt(totalPendiente)}</strong> en suscripciones pendientes este mes`;
+    pendienteHtml.style.display='block';
+  }else{
+    pendienteHtml.style.display='none';
+  }
 
   // Por categoría
   const porCat={};
