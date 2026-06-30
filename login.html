@@ -3,33 +3,36 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="theme-color" content="#1a1a2e">
+  <meta name="theme-color" content="#0a0e14">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <title>Gastos — Acceso</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
-    :root{--bg:#0f0f1a;--surface:#1a1a2e;--card:#22223a;--border:rgba(255,255,255,0.08);--text:#f0f0f5;--muted:rgba(240,240,245,0.45);--accent:#6c63ff;--danger:#ff6b6b;--radius:14px;--radius-sm:10px}
+    :root{--bg:#0a0e14;--surface:#11161f;--card:#161c28;--border:rgba(255,255,255,0.06);--border-2:rgba(255,255,255,0.1);--text:#f4f6f9;--muted:rgba(244,246,249,0.42);--accent:#2dd4bf;--accent-2:#0ea5e9;--danger:#fb5d5d;--radius:16px;--radius-sm:12px}
     *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-    html,body{height:100%;background:var(--bg);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:var(--text)}
+    html,body{height:100%;background:var(--bg);font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:var(--text);-webkit-font-smoothing:antialiased}
     .wrap{min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}
-    .logo{font-size:48px;margin-bottom:10px}
-    .title{font-size:26px;font-weight:700;letter-spacing:-0.5px;margin-bottom:4px}
+    .logo{width:64px;height:64px;border-radius:18px;background:linear-gradient(135deg,#2dd4bf,#0ea5e9);display:flex;align-items:center;justify-content:center;font-size:30px;margin-bottom:14px;box-shadow:0 8px 24px rgba(45,212,191,0.3)}
+    .title{font-size:27px;font-weight:800;letter-spacing:-0.6px;margin-bottom:4px}
     .title span{color:var(--accent)}
-    .subtitle{font-size:14px;color:var(--muted);margin-bottom:36px}
-    .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;width:100%;max-width:380px}
+    .subtitle{font-size:14px;color:var(--muted);margin-bottom:36px;font-weight:500}
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:24px;width:100%;max-width:380px;box-shadow:0 12px 40px rgba(0,0,0,0.3)}
     .tabs{display:flex;gap:4px;margin-bottom:24px;background:var(--card);border-radius:var(--radius-sm);padding:4px}
-    .tab{flex:1;padding:8px;font-size:14px;font-weight:500;border:none;background:none;color:var(--muted);border-radius:10px;cursor:pointer;transition:all .15s}
-    .tab.active{background:var(--accent);color:white}
+    .tab{flex:1;padding:9px;font-size:14px;font-weight:700;border:none;background:none;color:var(--muted);border-radius:10px;cursor:pointer;transition:all .15s}
+    .tab.active{background:linear-gradient(135deg,#2dd4bf,#0ea5e9);color:#06141a}
     .field{margin-bottom:14px}
-    .field label{display:block;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;font-weight:500}
-    input{width:100%;background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:13px 14px;color:var(--text);font-size:15px;outline:none;transition:border-color .15s;font-family:inherit}
-    input:focus{border-color:var(--accent)}
-    .btn{width:100%;padding:15px;background:var(--accent);color:white;border:none;border-radius:var(--radius);font-size:16px;font-weight:600;cursor:pointer;margin-top:4px;transition:opacity .15s}
+    .field label{display:block;font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:7px;font-weight:700}
+    input{width:100%;background:var(--card);border:1.5px solid var(--border-2);border-radius:var(--radius-sm);padding:13px 14px;color:var(--text);font-size:15px;outline:none;transition:all .15s;font-family:inherit;font-weight:500}
+    input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(45,212,191,0.14)}
+    .btn{width:100%;padding:15px;background:linear-gradient(135deg,#2dd4bf,#0ea5e9);color:#06141a;border:none;border-radius:var(--radius);font-size:16px;font-weight:700;cursor:pointer;margin-top:4px;transition:opacity .15s;box-shadow:0 4px 16px rgba(45,212,191,0.25)}
     .btn:active{opacity:.85}
     .btn:disabled{opacity:.5;cursor:not-allowed}
-    .msg{font-size:13px;text-align:center;margin-top:14px;min-height:20px;padding:8px;border-radius:8px}
-    .msg.error{background:rgba(255,107,107,0.1);color:var(--danger)}
-    .msg.ok{background:rgba(81,207,102,0.1);color:#51cf66}
-    .hint{font-size:12px;color:var(--muted);text-align:center;line-height:1.5;margin-top:20px}
+    .msg{font-size:13px;text-align:center;margin-top:14px;min-height:20px;padding:8px;border-radius:8px;font-weight:500}
+    .msg.error{background:rgba(251,93,93,0.1);color:var(--danger)}
+    .msg.ok{background:rgba(52,211,153,0.1);color:#34d399}
+    .hint{font-size:12px;color:var(--muted);text-align:center;line-height:1.5;margin-top:20px;font-weight:500}
   </style>
 </head>
 <body>
