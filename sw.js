@@ -1,4 +1,4 @@
-const CACHE = 'gastos-v2';
+const CACHE = 'gastos-v3';
 const ASSETS = ['/login.html', '/app.html', '/manifest.json'];
 
 self.addEventListener('install', e => {
@@ -13,8 +13,16 @@ self.addEventListener('activate', e => {
   self.clients.claim();
 });
 
+// Network-first: siempre intenta traer la versión más nueva del servidor.
+// Solo usa el caché si no hay conexión a internet.
 self.addEventListener('fetch', e => {
   e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request).catch(() => caches.match('/login.html')))
+    fetch(e.request)
+      .then(response => {
+        const copy = response.clone();
+        caches.open(CACHE).then(c => c.put(e.request, copy));
+        return response;
+      })
+      .catch(() => caches.match(e.request).then(cached => cached || caches.match('/login.html')))
   );
 });
