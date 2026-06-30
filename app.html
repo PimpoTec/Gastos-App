@@ -1039,10 +1039,10 @@ function renderSubs(){
 
   const lista=document.getElementById('s-lista');
   if(!subs.length){lista.innerHTML=`<div class="empty"><div class="ico">🔄</div><p>Sin suscripciones.</p></div>`;return;}
-  const hoy=new Date().getDate();
+  const hoyDia=hoy.getDate();
   lista.innerHTML=[...subs].sort((a,b)=>a.dia-b.dia).map(s=>{
     const t=getTarjeta(s.pago);const c=getCat(s.cat,'sub');
-    const diff=s.dia>=hoy?s.dia-hoy:30-hoy+s.dia;
+    const diff=s.dia>=hoyDia?s.dia-hoyDia:30-hoyDia+s.dia;
     const prox=diff>=0&&diff<=5;
     const usdTag=s.moneda==='USD'?`<span class="usd-tag">USD</span>`:'';
     return`<div class="gasto-item" style="${prox?'border:1.5px solid rgba(255,212,59,0.4)':''}" onclick="openModalSub(${s.id})"><div class="ico" style="background:${c.color}22">${c.icono}</div><div class="info"><div class="desc">${s.nombre}</div><div class="meta"><span style="color:${t.color}">${t.icono} ${t.nombre}</span> · día ${s.dia} ${usdTag}</div></div><div class="right"><div class="amount">${fmt(s.monto,s.moneda)}</div><div style="font-size:11px;color:var(--muted);margin-top:2px">/mes</div></div></div>`;
