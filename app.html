@@ -553,11 +553,13 @@ function getCatIngreso(id){return CATS_INGRESO.find(c=>c.id===id)||CATS_INGRESO[
 
 function inicioPeriodo(d,dH=new Date()){const diaH=dH.getDate();if(diaH>d)return new Date(dH.getFullYear(),dH.getMonth(),d+1);const ms=new Date(dH.getFullYear(),dH.getMonth()-1,1);return new Date(ms.getFullYear(),ms.getMonth(),d+1);}
 function proximoCierreFecha(d,dH=new Date()){const f=new Date(dH.getFullYear(),dH.getMonth(),d);if(dH.getDate()>d)f.setMonth(f.getMonth()+1);return f;}
-function calcularCuotaActual(fechaCompra,diaCierre){
-  const fC=new Date(fechaCompra+'T00:00:00'),hoy=new Date();hoy.setHours(0,0,0,0);
+function calcularCuotaActual(fechaCompra,diaCierre,fechaReferencia=null){
+  const fC=new Date(fechaCompra+'T00:00:00');
+  const ref=fechaReferencia?new Date(fechaReferencia):new Date();
+  ref.setHours(0,0,0,0);
   let pC=new Date(fC.getFullYear(),fC.getMonth(),diaCierre);
   if(fC.getDate()>diaCierre)pC.setMonth(pC.getMonth()+1);
-  let ev=new Date(pC),n=0;while(ev<hoy){n++;ev.setMonth(ev.getMonth()+1);}return n+1;
+  let ev=new Date(pC),n=0;while(ev<ref){n++;ev.setMonth(ev.getMonth()+1);}return n+1;
 }
 
 // ── UI ───────────────────────────────────────────────
@@ -1031,8 +1033,9 @@ function renderCuotas(){
   const totalMes=activas.filter(g=>g.moneda!=='USD').reduce((a,g)=>a+g.monto,0);
   document.getElementById('cu-mes').textContent=fmt(totalMes);
 
-  // Próximo cobro: la tarjeta con cuotas activas que cierra más pronto
-  const pagosConCuotas=[...new Set(activas.map(g=>g.pago))];
+  // Próximo cobro: para cada tarjeta, recalculamos qué cuotas van a estar
+  // activas en el PRÓXIMO cierre (no en el de hoy), así excluimos las que terminan
+  const pagosConCuotas=[...new Set(gastos.filter(g=>g.cuotas).map(g=>g.pago))];
   let proxCobro=null;
   pagosConCuotas.forEach(pid=>{
     const cfg=cierres[pid];
@@ -1040,9 +1043,15 @@ function renderCuotas(){
     const fCierre=proximoCierreFecha(cfg.dia);
     const diff=Math.ceil((fCierre-new Date())/(1000*60*60*24));
     const t=getTarjeta(pid);
-    const montoEsteVencimiento=activas.filter(g=>g.pago===pid&&g.moneda!=='USD').reduce((a,g)=>a+g.monto,0);
-    if(!proxCobro||diff<proxCobro.diff){
-      proxCobro={diff,nombre:t.nombre,monto:montoEsteVencimiento};
+    // Para cada gasto en cuotas de esta tarjeta, calculamos el número de cuota
+    // que correspondería en la fecha del PRÓXIMO cierre
+    const gastosDeEstaTarjeta=gastos.filter(g=>g.cuotas&&g.pago===pid&&g.moneda!=='USD');
+    const montoProximoCierre=gastosDeEstaTarjeta.reduce((a,g)=>{
+      const numCuotaEnProxCierre=calcularCuotaActual(g.fecha,cfg.dia,fCierre);
+      return numCuotaEnProxCierre<=g.cuotas?a+g.monto:a;
+    },0);
+    if(montoProximoCierre>0&&(!proxCobro||diff<proxCobro.diff)){
+      proxCobro={diff,nombre:t.nombre,monto:montoProximoCierre};
     }
   });
   if(proxCobro){
