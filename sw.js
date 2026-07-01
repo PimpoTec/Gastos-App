@@ -1,4 +1,4 @@
-const CACHE = 'gastos-v3';
+const CACHE = 'gastos-v4';
 const ASSETS = ['/login.html', '/app.html', '/manifest.json'];
 
 self.addEventListener('install', e => {
@@ -13,12 +13,9 @@ self.addEventListener('activate', e => {
   self.clients.claim();
 });
 
-// Network-first: siempre intenta traer la versión más nueva del servidor.
-// Solo usa el caché si no hay conexión a internet.
+// Network-first
 self.addEventListener('fetch', e => {
-  // Ignorar requests que no sean http/https (ej: chrome-extension://)
   if (!e.request.url.startsWith('http')) return;
-
   e.respondWith(
     fetch(e.request)
       .then(response => {
@@ -27,5 +24,36 @@ self.addEventListener('fetch', e => {
         return response;
       })
       .catch(() => caches.match(e.request).then(cached => cached || caches.match('/login.html')))
+  );
+});
+
+// ── Recibir notificación push ────────────────────────
+self.addEventListener('push', e => {
+  if (!e.data) return;
+  let data;
+  try { data = e.data.json(); } catch { data = { title: 'Mis Gastos', body: e.data.text() }; }
+
+  e.waitUntil(
+    self.registration.showNotification(data.title || 'Mis Gastos', {
+      body: data.body || '',
+      icon: data.icon || '/icon/icon-192.png',
+      badge: '/icon/icon-192.png',
+      vibrate: [200, 100, 200],
+      tag: 'misgastos-notif',
+      renotify: true,
+      data: { url: '/app.html' }
+    })
+  );
+});
+
+// ── Click en notificación → abrir app ───────────────
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(cs => {
+      const c = cs.find(c => c.url.includes('app.html'));
+      if (c) return c.focus();
+      return clients.openWindow('/app.html');
+    })
   );
 });
