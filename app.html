@@ -178,7 +178,19 @@
     .stat-card .val.acc{color:var(--accent)}
     .stat-card .val.dng{color:var(--danger)}
     .stat-card .val.grn{color:var(--success)}
-    .err{border-color:var(--danger)!important;animation:shake .3s}
+    .notif-item{display:flex;align-items:center;gap:10px;background:var(--card);border-radius:14px;padding:13px 14px;margin-bottom:8px;border:1px solid var(--border)}
+    .notif-item .ico{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+    .notif-item .info{flex:1;min-width:0}
+    .notif-item .name{font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .notif-item .dias-select{font-size:12px;background:var(--card-2);border:1px solid var(--border-2);border-radius:8px;padding:4px 8px;color:var(--text);margin-top:4px;opacity:1;transition:opacity .2s}
+    .notif-item .dias-select:disabled{opacity:.35}
+    /* Toggle switch */
+    .toggle{position:relative;width:44px;height:26px;flex-shrink:0}
+    .toggle input{opacity:0;width:0;height:0}
+    .toggle-slider{position:absolute;inset:0;background:rgba(255,255,255,0.1);border-radius:99px;cursor:pointer;transition:background .2s}
+    .toggle-slider::before{content:'';position:absolute;width:20px;height:20px;left:3px;top:3px;background:white;border-radius:50%;transition:transform .2s}
+    .toggle input:checked + .toggle-slider{background:var(--accent)}
+    .toggle input:checked + .toggle-slider::before{transform:translateX(18px)}
     @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
     #loading-overlay{position:fixed;inset:0;background:var(--bg);z-index:999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px}
     .spinner{width:38px;height:38px;border:3px solid var(--border-2);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
@@ -275,6 +287,11 @@
         </div>
       </div>
       <div class="section-title">Configuración <button class="btn-cfg" onclick="switchTab('gastos')">← Volver</button></div>
+      <div style="margin-bottom:20px">
+        <p class="section-title">🔔 Notificaciones</p>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:12px;line-height:1.5">Activá alertas para tus tarjetas y suscripciones.</p>
+        <div id="notif-config-list"></div>
+      </div>
       <div style="margin-bottom:20px">
         <p class="section-title">Medios de pago</p>
         <div id="lista-tarjetas"></div>
@@ -511,10 +528,11 @@ async function dbCargarIngresos(){
 async function dbUpsertIngreso(i){await sb.from('ingresos').upsert({id:i.id,user_id:currentUser.id,monto:i.monto,descripcion:i.desc,cat:i.cat,fecha:i.fecha,moneda:i.moneda||'ARS'});}
 async function dbDeleteIngreso(id){await sb.from('ingresos').delete().eq('id',id).eq('user_id',currentUser.id);}
 async function dbCargarConfig(){
-  const{data}=await sb.from('config').select('cierres').eq('user_id',currentUser.id).maybeSingle();
-  return data?.cierres||{};
+  const{data}=await sb.from('config').select('cierres, notif_config').eq('user_id',currentUser.id).maybeSingle();
+  return {cierres: data?.cierres||{}, notifConfig: data?.notif_config||{}};
 }
 async function dbGuardarConfig(c){await sb.from('config').upsert({user_id:currentUser.id,cierres:c,updated_at:new Date().toISOString()});}
+async function dbGuardarNotifConfig(nc){await sb.from('config').upsert({user_id:currentUser.id,notif_config:nc,updated_at:new Date().toISOString()});}
 async function dbCargarTarjetas(){
   const{data,error}=await sb.from('tarjetas').select('*').eq('user_id',currentUser.id).order('created_at',{ascending:true});
   if(error)return[];
@@ -531,7 +549,7 @@ async function dbUpsertCat(c){await sb.from('categorias').upsert({id:c.id,user_i
 async function dbDeleteCat(id){await sb.from('categorias').delete().eq('id',id).eq('user_id',currentUser.id);}
 
 // ── Estado ───────────────────────────────────────────
-let gastos=[],subs=[],ingresos=[],cierres={},tarjetas=[],cats=[];
+let gastos=[],subs=[],ingresos=[],cierres={},notifConfig={},tarjetas=[],cats=[];
 let tabActual='gastos';
 let selPagoGasto=null,selCatGasto=null,selPagoSub=null,selCatSub=null,selCatIngreso='sueldo';
 let selEmojiGridT='💳',selColorGridT='#748ffc';
@@ -1191,11 +1209,87 @@ function renderBalance(){
   }).join('');
 }
 
-function renderPerfil(){
+function renderNotifConfig(){
+  const container = document.getElementById('notif-config-list');
+  if(!container) return;
+  const tarjetasCredito = tarjetas.filter(t=>t.esTarjeta&&cierres[t.id]);
+  let html = '';
+
+  // Tarjetas de crédito con cierre configurado
+  if(tarjetasCredito.length){
+    html += `<div style="font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Cierres de tarjeta</div>`;
+    html += tarjetasCredito.map(t=>{
+      const key=`tarjeta_${t.id}`;
+      const cfg=notifConfig[key]||{activo:true,dias:2};
+      return `<div class="notif-item">
+        <div class="ico" style="background:${t.color}22">${t.icono}</div>
+        <div class="info">
+          <div class="name">${t.nombre}</div>
+          <select class="dias-select" id="dias_${key}" onchange="updateNotifConfig('${key}')" ${!cfg.activo?'disabled':''}>
+            <option value="1" ${cfg.dias===1?'selected':''}>1 día antes</option>
+            <option value="2" ${cfg.dias===2?'selected':''}>2 días antes</option>
+            <option value="3" ${cfg.dias===3?'selected':''}>3 días antes</option>
+          </select>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" ${cfg.activo?'checked':''} onchange="toggleNotif('${key}',this.checked)">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>`;
+    }).join('');
+  }
+
+  // Suscripciones
+  if(subs.length){
+    html += `<div style="font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin:16px 0 8px">Suscripciones</div>`;
+    html += subs.map(s=>{
+      const key=`sub_${s.id}`;
+      const cfg=notifConfig[key]||{activo:true,dias:1};
+      const c=getCat(s.cat,'sub');
+      return `<div class="notif-item">
+        <div class="ico" style="background:${c.color}22">${c.icono}</div>
+        <div class="info">
+          <div class="name">${s.nombre}</div>
+          <select class="dias-select" id="dias_${key}" onchange="updateNotifConfig('${key}')" ${!cfg.activo?'disabled':''}>
+            <option value="1" ${cfg.dias===1?'selected':''}>1 día antes</option>
+            <option value="2" ${cfg.dias===2?'selected':''}>2 días antes</option>
+            <option value="3" ${cfg.dias===3?'selected':''}>3 días antes</option>
+          </select>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" ${cfg.activo?'checked':''} onchange="toggleNotif('${key}',this.checked)">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>`;
+    }).join('');
+  }
+
+  if(!tarjetasCredito.length && !subs.length){
+    html = '<div style="font-size:13px;color:var(--muted)">Primero configurá tarjetas de crédito (con cierre) y suscripciones.</div>';
+  }
+
+  container.innerHTML = html;
+}
+
+async function toggleNotif(key, activo){
+  notifConfig[key] = { ...(notifConfig[key]||{dias:key.startsWith('tarjeta')?2:1}), activo };
+  // Habilitar/deshabilitar el select de días
+  const sel = document.getElementById(`dias_${key}`);
+  if(sel) sel.disabled = !activo;
+  await dbGuardarNotifConfig(notifConfig);
+}
+
+async function updateNotifConfig(key){
+  const sel = document.getElementById(`dias_${key}`);
+  if(!sel) return;
+  notifConfig[key] = { ...(notifConfig[key]||{activo:true}), dias: parseInt(sel.value) };
+  await dbGuardarNotifConfig(notifConfig);
+}
   const nombre=nombrePerfil||currentUser?.email?.split('@')[0]||'Usuario';
   document.getElementById('perfil-nombre-display').textContent=nombre;
   document.getElementById('perfil-email').textContent=currentUser?.email||'';
   document.getElementById('n-nombre').value=nombrePerfil;
+  renderNotifConfig();
   const lt=document.getElementById('lista-tarjetas');
   lt.innerHTML=tarjetas.map(t=>`<div class="config-item" onclick="openModalTarjeta(${t.id})"><div class="ico-box" style="background:${t.color}22">${t.icono}</div><div style="flex:1"><div class="name">${t.nombre}</div><div class="sub">${t.esTarjeta?'Tarjeta de crédito':'Otro medio'}</div></div><div class="arr">›</div></div>`).join('')
   ||'<div style="font-size:13px;color:var(--muted);padding:8px 0 12px">Sin medios de pago</div>';
@@ -1271,9 +1365,12 @@ async function initPushNotifications() {
   if(!session){window.location.href='login.html';return;}
   currentUser=session.user;
   showLoading('Cargando datos...');
-  [gastos,subs,ingresos,cierres,tarjetas,cats]=await Promise.all([
-    dbCargarGastos(),dbCargarSubs(),dbCargarIngresos(),dbCargarConfig(),dbCargarTarjetas(),dbCargarCats()
+  [gastos,subs,ingresos,tarjetas,cats]=await Promise.all([
+    dbCargarGastos(),dbCargarSubs(),dbCargarIngresos(),dbCargarTarjetas(),dbCargarCats()
   ]);
+  const configData = await dbCargarConfig();
+  cierres = configData.cierres;
+  notifConfig = configData.notifConfig;
   hideLoading();
   renderAll();
   setTimeout(checkRecordatorioMes, 800);
