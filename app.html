@@ -1159,14 +1159,15 @@ function renderFeed(){
   });
 
   // Cierres de tarjeta que ya pasaron este mes
+  const INTERES_TC = 0.0121; // 1.21% fijo
+
   tarjetas.filter(t=>t.esTarjeta&&cierres[t.id]).forEach(t=>{
     const cfg=cierres[t.id];
     const fCierreAnterior=new Date(hoy.getFullYear(),hoy.getMonth(),cfg.dia);
     if(hoy.getDate()<=cfg.dia) fCierreAnterior.setMonth(fCierreAnterior.getMonth()-1);
-    // Solo mostrar si el cierre anterior fue este mes o el mes pasado (reciente)
     const diffDias=Math.floor((hoy-fCierreAnterior)/(1000*60*60*24));
-    if(diffDias>=0&&diffDias<=60){
-      // Buscar gastos del período cerrado
+    // Solo mostrar desde el día DESPUÉS del cierre (diffDias >= 1) hasta 60 días
+    if(diffDias>=1&&diffDias<=60){
       const fDesde=new Date(fCierreAnterior);fDesde.setMonth(fDesde.getMonth()-1);fDesde.setDate(cfg.dia+1);
       const gastosDelPeriodo=gastos.filter(g=>{
         if(g.pago!=t.id||g.moneda==='USD')return false;
@@ -1175,7 +1176,7 @@ function renderFeed(){
         return fd>=fDesde&&fd<=fCierreAnterior;
       });
       if(gastosDelPeriodo.length>0){
-        eventos.push({fecha:new Date(fCierreAnterior.getTime()+86400000),tipo:'cierre',tarjeta:t,gastosPeriodo:gastosDelPeriodo,fDesde,fHasta:fCierreAnterior});
+        eventos.push({fecha:new Date(fCierreAnterior.getTime()+86400000),tipo:'cierre',tarjeta:t,gastosPeriodo:gastosDelPeriodo,fDesde,fHasta:fCierreAnterior,interes:INTERES_TC});
       }
     }
   });
@@ -1202,13 +1203,17 @@ function renderFeed(){
     }
     if(e.tipo==='cierre'){
       const total=e.gastosPeriodo.reduce((a,g)=>a+g.monto,0);
+      const montoInteres=Math.round(total*e.interes);
+      const totalConInteres=total+montoInteres;
       const strDesde=e.fDesde.toLocaleDateString('es-AR',{day:'numeric',month:'short'});
       const strHasta=e.fHasta.toLocaleDateString('es-AR',{day:'numeric',month:'short'});
       htmlStr+=`<div class="feed-cierre">
         <div class="titulo">💳 Cierre ${e.tarjeta.nombre} · ${strDesde} → ${strHasta}</div>
         ${e.gastosPeriodo.slice(0,4).map(g=>`<div class="sub-row"><span>${g.desc}</span><span>${fmt(g.monto,g.moneda)}</span></div>`).join('')}
         ${e.gastosPeriodo.length>4?`<div class="sub-row" style="color:var(--muted)">...y ${e.gastosPeriodo.length-4} más</div>`:''}
-        <div class="total-row"><span>Total a pagar</span><span>${fmt(total)}</span></div>
+        <div class="sub-row" style="color:var(--muted)"><span>Subtotal gastos</span><span>${fmt(total)}</span></div>
+        <div class="sub-row" style="color:var(--muted)"><span>Interés (1.21%)</span><span>+${fmt(montoInteres)}</span></div>
+        <div class="total-row"><span>Total a pagar</span><span>${fmt(totalConInteres)}</span></div>
       </div>`;
     } else if(e.tipo==='ingreso'){
       const c=getCatIngreso(e.cat);
