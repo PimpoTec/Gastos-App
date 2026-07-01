@@ -212,7 +212,7 @@
       </div>
     </div>
     <div class="hero-card">
-      <div class="hero-lbl">Gasto total del mes</div>
+      <div class="hero-lbl">Salida de bolsillo del mes</div>
       <div class="hero-val" id="hero-total">$0</div>
       <div class="hero-sub" id="hero-sub">Cargando...</div>
       <div class="hero-row">
@@ -926,15 +926,29 @@ function getGastosMes(){
 }
 
 function updateHero(){
-  const mesG=getGastosMes();
-  const totalSubs=subs.filter(s=>s.moneda!=='USD').reduce((a,s)=>a+s.monto,0);
-  const totalARS=mesG.reduce((a,g)=>a+g.monto,0)+totalSubs;
   const hoy=new Date();
+  const tarjetasCredito=new Set(tarjetas.filter(t=>t.esTarjeta).map(t=>String(t.id)));
+
+  // Solo gastos que salen del bolsillo ahora (sin tarjeta de crédito, sin USD)
+  const mesG=gastos.filter(g=>{
+    if(g.moneda==='USD')return false;
+    if(tarjetasCredito.has(String(g.pago)))return false; // excluir TC
+    const d=new Date(g.fecha+'T00:00:00');
+    return d.getMonth()===hoy.getMonth()&&d.getFullYear()===hoy.getFullYear();
+  });
+  // Suscripciones que ya se debitaron este mes (mismo criterio)
+  const totalSubs=subs.filter(s=>s.moneda!=='USD'&&hoy.getDate()>=s.dia).reduce((a,s)=>a+s.monto,0);
+  const totalARS=mesG.reduce((a,g)=>a+g.monto,0)+totalSubs;
+
+  // USD
   const mesUSD=gastos.filter(g=>{if(g.moneda!=='USD')return false;const d=new Date(g.fecha+'T00:00:00');return d.getMonth()===hoy.getMonth()&&d.getFullYear()===hoy.getFullYear();});
   const subsUSD=subs.filter(s=>s.moneda==='USD').reduce((a,s)=>a+s.monto,0);
   const totalUSD=mesUSD.reduce((a,g)=>a+g.monto,0)+subsUSD;
+
+  // Tarjetas: total del período actual de cada TC
   let totalTarjetas=0;
   tarjetas.filter(t=>t.esTarjeta&&cierres[t.id]).forEach(t=>{totalTarjetas+=getGastosPeriodoActual(t.id,gastos);});
+
   document.getElementById('hero-total').textContent=fmt(totalARS);
   document.getElementById('hero-sub').textContent=new Date().toLocaleDateString('es-AR',{month:'long',year:'numeric'});
   document.getElementById('hero-tarjetas').textContent=fmt(totalTarjetas);
