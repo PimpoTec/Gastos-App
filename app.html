@@ -677,7 +677,7 @@ function openModalGasto(id=null){
   }
   renderChips('g-pago-chips',tarjetas,selPagoGasto,'gasto');
   renderCatChips('g-cat-chips',cats.filter(c=>c.tipo==='gasto'),selCatGasto,'gasto');
-  document.getElementById('modal-gasto').classList.add('open');
+  openModalWithHistory('modal-gasto');
 }
 
 function openModalSub(id=null){
@@ -700,7 +700,7 @@ function openModalSub(id=null){
   }
   renderChips('s-pago-chips',tarjetas,selPagoSub,'sub');
   renderCatChips('s-cat-chips',cats.filter(c=>c.tipo==='sub'),selCatSub,'sub');
-  document.getElementById('modal-sub').classList.add('open');
+  openModalWithHistory('modal-sub');
 }
 
 function openModalIngreso(id=null){
@@ -721,7 +721,7 @@ function openModalIngreso(id=null){
     titulo.innerText='Nuevo ingreso';btnSave.innerText='Guardar ingreso';btnDel.style.display='none';
   }
   renderCatIngresoChips();
-  document.getElementById('modal-ingreso').classList.add('open');
+  openModalWithHistory('modal-ingreso');
 }
 
 function renderCatIngresoChips(){
@@ -751,12 +751,12 @@ function openCierres(){
         </div>
       </div>
     </div>`).join('');
-  document.getElementById('modal-cierres').classList.add('open');
+  openModalWithHistory('modal-cierres');
 }
 
 function editarNombre(){
   document.getElementById('n-nombre').value=nombrePerfil;
-  document.getElementById('modal-nombre').classList.add('open');
+  openModalWithHistory('modal-nombre');
 }
 function guardarNombre(){
   nombrePerfil=document.getElementById('n-nombre').value.trim();
@@ -782,7 +782,7 @@ function openModalTarjeta(id=null){
   }
   renderEmojiGrid('t-emoji-grid',EMOJIS_PAGO,selEmojiT,'t');
   renderColorGrid('t-color-grid',selColorT,'t');
-  document.getElementById('modal-tarjeta').classList.add('open');
+  openModalWithHistory('modal-tarjeta');
 }
 function openModalCat(tipo,id=null){
   const titulo=document.getElementById('modal-cat-title');
@@ -800,7 +800,7 @@ function openModalCat(tipo,id=null){
   }
   renderEmojiGrid('cat-emoji-grid',EMOJIS_CAT,selEmojiC,'c');
   renderColorGrid('cat-color-grid',selColorC,'c');
-  document.getElementById('modal-cat').classList.add('open');
+  openModalWithHistory('modal-cat');
 }
 
 function renderEmojiGrid(cid,list,sel,ctx){
@@ -820,6 +820,23 @@ function selectColor(cid,c,ctx){
 
 function closeModals(){document.querySelectorAll('.modal-overlay').forEach(m=>m.classList.remove('open'));}
 document.querySelectorAll('.modal-overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)closeModals();}));
+
+// Interceptar botón atrás de Android
+// Cada vez que se abre un modal, pusheamos un estado al historial
+// Cuando el usuario toca "atrás", popstate lo captura y cierra el modal
+function pushModalHistory(){
+  history.pushState({modal:true}, '');
+}
+function openModalWithHistory(modalId){
+  document.getElementById(modalId).classList.add('open');
+  pushModalHistory();
+}
+window.addEventListener('popstate', e => {
+  const hayModalAbierto = [...document.querySelectorAll('.modal-overlay')].some(m=>m.classList.contains('open'));
+  if(hayModalAbierto){
+    closeModals();
+  }
+});
 function err(id){const e=document.getElementById(id);e.classList.add('err');setTimeout(()=>e.classList.remove('err'),600);}
 
 function renderChips(cid,list,sel,ctx){
@@ -1543,7 +1560,7 @@ function checkRecordatorioMes(){
   localStorage.setItem(claveMes,'shown');
   document.getElementById('recordatorio-mes').textContent=
     hoy.toLocaleDateString('es-AR',{month:'long',year:'numeric'});
-  document.getElementById('modal-recordatorio').classList.add('open');
+  openModalWithHistory('modal-recordatorio');
 }
 
 // ── Web Push nativo ──────────────────────────────────
