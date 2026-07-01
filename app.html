@@ -222,6 +222,8 @@
     .sp-btns{display:flex;gap:8px}
     .sp-btn-si{flex:1;padding:10px;background:var(--success);color:#06141a;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer}
     .sp-btn-no{flex:1;padding:10px;background:rgba(255,255,255,0.06);color:var(--muted);border:1px solid var(--border-2);border-radius:10px;font-size:13px;font-weight:600;cursor:pointer}
+    .tc-tab{flex-shrink:0;padding:7px 14px;border-radius:99px;font-size:13px;font-weight:600;border:1.5px solid var(--border-2);background:var(--card);color:var(--muted);cursor:pointer;transition:all .15s;white-space:nowrap}
+    .tc-tab.active{background:var(--accent-dim);border-color:var(--accent);color:var(--text)}
   </style>
 </head>
 
@@ -237,14 +239,63 @@
         <button class="btn-logout" onclick="logout()">Salir</button>
       </div>
     </div>
-    <div class="hero-card">
-      <div class="hero-lbl">Salida de bolsillo del mes</div>
-      <div class="hero-val" id="hero-total">$0</div>
-      <div class="hero-sub" id="hero-sub">Cargando...</div>
-      <div class="hero-row">
-        <div class="hero-mini"><div class="lbl">Tarjetas</div><div class="val" id="hero-tarjetas">$0</div></div>
-        <div class="hero-mini"><div class="lbl">Suscripciones</div><div class="val" id="hero-subs">$0</div></div>
-        <div class="hero-mini"><div class="lbl">En USD</div><div class="val" id="hero-usd">U$0</div></div>
+    <!-- Hero solo en gastos -->
+    <div id="header-hero-gastos">
+      <div class="hero-card">
+        <div class="hero-lbl">Salida de bolsillo del mes</div>
+        <div class="hero-val" id="hero-total">$0</div>
+        <div class="hero-sub" id="hero-sub">Cargando...</div>
+        <div class="hero-row">
+          <div class="hero-mini"><div class="lbl">Tarjetas</div><div class="val" id="hero-tarjetas">$0</div></div>
+          <div class="hero-mini"><div class="lbl">Suscripciones</div><div class="val" id="hero-subs">$0</div></div>
+          <div class="hero-mini"><div class="lbl">En USD</div><div class="val" id="hero-usd">U$0</div></div>
+        </div>
+      </div>
+    </div>
+    <!-- Header cuotas -->
+    <div id="header-hero-cuotas" style="display:none">
+      <div style="margin-bottom:6px">
+        <!-- Selector de tarjeta -->
+        <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none" id="cuotas-tarjeta-tabs"></div>
+      </div>
+      <div class="hero-card" style="padding:14px 16px">
+        <div class="hero-row" style="margin-top:0">
+          <div class="hero-mini">
+            <div class="lbl">Cuotas este mes</div>
+            <div class="val" id="cu-mes-hero">$0</div>
+          </div>
+          <div class="hero-mini">
+            <div class="lbl">Próximo cobro</div>
+            <div class="val" id="cu-prox-hero" style="font-size:13px;margin-top:2px">—</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Header subs -->
+    <div id="header-hero-subs" style="display:none">
+      <div class="hero-card" style="padding:14px 16px">
+        <div class="hero-row" style="margin-top:0">
+          <div class="hero-mini">
+            <div class="lbl">Total mensual ARS</div>
+            <div class="val" id="ss-mes-hero">$0</div>
+          </div>
+          <div class="hero-mini">
+            <div class="lbl">Total mensual USD</div>
+            <div class="val" id="ss-usd-hero">U$0</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Header balance -->
+    <div id="header-hero-balance" style="display:none">
+      <div class="balance-hero neutro" id="balance-hero" style="margin-bottom:0;border-radius:14px">
+        <div class="lbl">Balance del mes</div>
+        <div class="val" id="balance-val">$0</div>
+        <div class="sub" id="balance-sub">Cargando...</div>
+        <div class="balance-row">
+          <div class="balance-mini"><div class="lbl">💚 Ingresos</div><div class="val" id="balance-ing">$0</div></div>
+          <div class="balance-mini"><div class="lbl" id="balance-gas-label">🔴 Gastos</div><div class="val" id="balance-gas">$0</div></div>
+        </div>
       </div>
     </div>
   </div>
@@ -263,20 +314,12 @@
 
     <!-- CUOTAS -->
     <div class="panel" id="panel-cuotas">
-      <div class="stats-grid">
-        <div class="stat-card"><div class="lbl">Total cuotas/mes</div><div class="val acc" id="cu-mes">$0</div></div>
-        <div class="stat-card"><div class="lbl">Próximo cobro</div><div class="val" id="cu-prox" style="font-size:14px;margin-top:5px">—</div></div>
-      </div>
       <div class="section-title">Cuotas activas</div>
       <div id="c-lista"></div>
     </div>
 
     <!-- SUSCRIPCIONES -->
     <div class="panel" id="panel-subs">
-      <div class="stats-grid">
-        <div class="stat-card"><div class="lbl">Por mes</div><div class="val acc" id="ss-mes">$0</div></div>
-        <div class="stat-card"><div class="lbl">Por año</div><div class="val dng" id="ss-anual">$0</div></div>
-      </div>
       <div id="subs-pendientes-wrap" style="display:none">
         <div class="section-title" style="color:var(--warning)">⚠ Pendientes de confirmar</div>
         <div id="subs-pendientes-list" style="margin-bottom:20px"></div>
@@ -289,15 +332,6 @@
 
     <!-- BALANCE -->
     <div class="panel" id="panel-balance">
-      <div class="balance-hero neutro" id="balance-hero">
-        <div class="lbl">Balance del mes</div>
-        <div class="val" id="balance-val">$0</div>
-        <div class="sub" id="balance-sub">Cargando...</div>
-        <div class="balance-row">
-          <div class="balance-mini"><div class="lbl">💚 Ingresos</div><div class="val" id="balance-ing">$0</div></div>
-          <div class="balance-mini"><div class="lbl" id="balance-gas-label">🔴 Gastos</div><div class="val" id="balance-gas">$0</div></div>
-        </div>
-      </div>
       <div class="section-title">Por categoría de ingreso</div>
       <div id="balance-cats" style="margin-bottom:20px"></div>
       <div class="section-title">Ingresos del mes <button class="btn-cfg" onclick="openModalIngreso()">+ Agregar</button></div>
@@ -633,16 +667,24 @@ function calcularCuotaActual(fechaCompra,diaCierre,fechaReferencia=null){
 }
 
 // ── UI ───────────────────────────────────────────────
+let cuotasTarjetaSel = null; // tarjeta seleccionada en cuotas
+
 function switchTab(tab){
   tabActual=tab;
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById('panel-'+tab).classList.add('active');
   const nb=document.getElementById('nav-'+tab);if(nb)nb.classList.add('active');
+  // Mostrar header correcto
+  ['gastos','cuotas','subs','balance'].forEach(t=>{
+    const el=document.getElementById('header-hero-'+t);
+    if(el) el.style.display = t===tab ? '' : 'none';
+  });
   document.getElementById('fab-btn').style.display=tab==='perfil'?'none':'flex';
   closeModals();
-  if(tab==='perfil')renderPerfil();
-  if(tab==='balance')renderBalance();
+  if(tab==='perfil') renderPerfil();
+  if(tab==='balance') renderBalance();
+  if(tab==='cuotas') renderCuotasTabs();
 }
 
 function abrirModalCorrecto(){
@@ -977,7 +1019,11 @@ async function saveCierres(){
 }
 
 // ── Render ───────────────────────────────────────────
-function renderAll(){updateHero();renderDashboard();renderFeed();renderCuotas();renderSubs();}
+function renderAll(){
+  updateHero();renderDashboard();renderFeed();
+  if(tabActual==='cuotas') renderCuotasTabs(); else renderCuotas();
+  renderSubs();
+}
 
 function getGastosMes(){
   const hoy=new Date();
@@ -1090,52 +1136,76 @@ function renderDashboard(){
   }).join('');
 }
 
+function renderCuotasTabs(){
+  const tarjetasCredito=tarjetas.filter(t=>t.esTarjeta);
+  const tabsEl=document.getElementById('cuotas-tarjeta-tabs');
+  if(!tabsEl)return;
+  if(!tarjetasCredito.length){tabsEl.innerHTML='';return;}
+  // Seleccionar primera por defecto
+  if(!cuotasTarjetaSel||!tarjetasCredito.find(t=>t.id==cuotasTarjetaSel)){
+    cuotasTarjetaSel=tarjetasCredito[0].id;
+  }
+  tabsEl.innerHTML=tarjetasCredito.map(t=>`
+    <button class="tc-tab ${t.id==cuotasTarjetaSel?'active':''}" onclick="selCuotaTab(${t.id})" style="${t.id==cuotasTarjetaSel?`border-color:${t.color};color:${t.color};background:${t.color}18`:''}">${t.icono} ${t.nombre}</button>
+  `).join('');
+  renderCuotas();
+}
+
+function selCuotaTab(id){
+  cuotasTarjetaSel=id;
+  renderCuotasTabs();
+}
+
 function renderCuotas(){
   const lista=document.getElementById('c-lista');
+  const tarjetasCredito=tarjetas.filter(t=>t.esTarjeta);
+
+  // Calcular stats para la tarjeta seleccionada
+  const tSel=tarjetasCredito.find(t=>t.id==cuotasTarjetaSel)||tarjetasCredito[0];
+  const cfgSel=tSel?cierres[tSel.id]:null;
+
   const activas=gastos.filter(g=>g.cuotas).map(g=>{
     const dc=cierres[g.pago]?.dia||31;const n=calcularCuotaActual(g.fecha,dc);
     return{...g,numCuota:n,t:getTarjeta(g.pago)};
   }).filter(g=>g.numCuota<=g.cuotas);
 
-  // Total que se paga este mes en cuotas (solo ARS)
-  const totalMes=activas.filter(g=>g.moneda!=='USD').reduce((a,g)=>a+g.monto,0);
-  document.getElementById('cu-mes').textContent=fmt(totalMes);
+  // Stats de la tarjeta seleccionada
+  const activasDeTarjeta=tSel?activas.filter(g=>g.pago==tSel.id&&g.moneda!=='USD'):[];
+  const totalMesSel=activasDeTarjeta.reduce((a,g)=>a+g.monto,0);
+  const cuMesHero=document.getElementById('cu-mes-hero');
+  const cuProxHero=document.getElementById('cu-prox-hero');
+  if(cuMesHero) cuMesHero.textContent=fmt(totalMesSel);
 
-  // Próximo cobro: el cierre actual (donde estamos parados) determina el monto
-  // de "este mes" (ya calculado arriba en totalMes). El "próximo cobro" es el
-  // cierre que viene DESPUÉS de ese, así que avanzamos un mes más desde el cierre actual.
-  const pagosConCuotas=[...new Set(gastos.filter(g=>g.cuotas).map(g=>g.pago))];
-  let proxCobro=null;
-  pagosConCuotas.forEach(pid=>{
-    const cfg=cierres[pid];
-    if(!cfg?.dia)return;
-    const cierreActual=proximoCierreFecha(cfg.dia); // el cierre más próximo desde hoy
-    const cierreSiguiente=new Date(cierreActual);
-    cierreSiguiente.setMonth(cierreSiguiente.getMonth()+1); // el de después de ese
-    const diff=Math.ceil((cierreActual-new Date())/(1000*60*60*24));
-    const t=getTarjeta(pid);
-    // Para cada gasto en cuotas de esta tarjeta, calculamos el número de cuota
-    // que correspondería el día DESPUÉS del cierre actual (ya en el período siguiente)
-    const fechaPeriodoSiguiente=new Date(cierreActual);
-    fechaPeriodoSiguiente.setDate(fechaPeriodoSiguiente.getDate()+1);
-    const gastosDeEstaTarjeta=gastos.filter(g=>g.cuotas&&g.pago===pid&&g.moneda!=='USD');
-    const montoProximoCierre=gastosDeEstaTarjeta.reduce((a,g)=>{
-      const numCuotaEnProxPeriodo=calcularCuotaActual(g.fecha,cfg.dia,fechaPeriodoSiguiente);
-      return numCuotaEnProxPeriodo<=g.cuotas?a+g.monto:a;
+  // Próximo cobro de la tarjeta seleccionada
+  if(cuProxHero&&cfgSel?.dia){
+    const cierreActual=proximoCierreFecha(cfgSel.dia);
+    const cierreSig=new Date(cierreActual);cierreSig.setMonth(cierreSig.getMonth()+1);
+    const fechaProx=new Date(cierreActual);fechaProx.setDate(fechaProx.getDate()+1);
+    const montoProx=gastos.filter(g=>g.cuotas&&g.pago==tSel.id&&g.moneda!=='USD').reduce((a,g)=>{
+      const n=calcularCuotaActual(g.fecha,cfgSel.dia,fechaProx);
+      return n<=g.cuotas?a+g.monto:a;
     },0);
-    if(montoProximoCierre>0&&(!proxCobro||diff<proxCobro.diff)){
-      proxCobro={diff,nombre:t.nombre,monto:montoProximoCierre};
-    }
-  });
-  if(proxCobro){
-    const txt=proxCobro.diff===0?'hoy':proxCobro.diff===1?'mañana':`en ${proxCobro.diff} días`;
-    document.getElementById('cu-prox').innerHTML=`${fmt(proxCobro.monto)}<br><span style="font-size:11px;color:var(--muted);font-weight:500">${proxCobro.nombre} · ${txt}</span>`;
-  }else{
-    document.getElementById('cu-prox').textContent='—';
+    const diff=Math.ceil((cierreActual-new Date())/(1000*60*60*24));
+    const txtDiff=diff===0?'hoy':diff===1?'mañana':`en ${diff} días`;
+    cuProxHero.innerHTML=`<span style="font-size:18px;font-weight:800">${fmt(montoProx)}</span><br><span style="font-size:11px;opacity:.7">Cierra ${txtDiff}</span>`;
+  } else if(cuProxHero){
+    cuProxHero.textContent='Sin cierre config.';
   }
 
-  if(!activas.length){lista.innerHTML=`<div class="empty"><div class="ico">✅</div><p>Sin cuotas activas.</p></div>`;return;}
-  lista.innerHTML=activas.map(g=>`<div class="gasto-item" onclick="openModalGasto(${g.id})"><div class="info"><div class="desc">${g.desc}</div><div class="meta"><span style="color:${g.t.color}">${g.t.icono} ${g.t.nombre}</span> · ${new Date(g.fecha+'T00:00:00').toLocaleDateString('es-AR',{month:'short',year:'numeric'})}</div></div><div class="right"><div class="amount" style="color:var(--accent)">${g.numCuota}/${g.cuotas}</div><div style="font-size:12px;color:var(--muted);margin-top:3px">${fmt(g.monto,g.moneda)}</div></div></div>`).join('');
+  // Lista filtrada por tarjeta seleccionada
+  const filtradas=tSel?activas.filter(g=>g.pago==tSel.id):activas;
+  if(!filtradas.length){lista.innerHTML=`<div class="empty"><div class="ico">✅</div><p>Sin cuotas activas${tSel?` en ${tSel.nombre}`:''}.</p></div>`;return;}
+  lista.innerHTML=filtradas.map(g=>`<div class="feed-item" onclick="openModalGasto(${g.id})">
+    <div class="ico" style="background:${getCat(g.cat,'gasto').color}22">${getCat(g.cat,'gasto').icono}</div>
+    <div class="info">
+      <div class="desc">${g.desc}</div>
+      <div class="meta">${new Date(g.fecha+'T00:00:00').toLocaleDateString('es-AR',{month:'short',year:'numeric'})}</div>
+    </div>
+    <div style="text-align:right;flex-shrink:0">
+      <div style="font-size:16px;font-weight:800;color:var(--accent)">${g.numCuota}/${g.cuotas}</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:2px">${fmt(g.monto,g.moneda)}</div>
+    </div>
+  </div>`).join('');
 }
 
 // ── Feed de movimientos ──────────────────────────────
@@ -1313,8 +1383,10 @@ function renderSubs(){
   renderSubsPendientes();
   const arsTotal=subs.filter(s=>s.moneda!=='USD').reduce((a,s)=>a+s.monto,0);
   const usdTotal=subs.filter(s=>s.moneda==='USD').reduce((a,s)=>a+s.monto,0);
-  document.getElementById('ss-mes').textContent=fmt(arsTotal)+(usdTotal>0?` + ${fmt(usdTotal,'USD')}`:'');
-  document.getElementById('ss-anual').textContent=fmt(arsTotal*12);
+  const ssMesHero=document.getElementById('ss-mes-hero');
+  const ssUsdHero=document.getElementById('ss-usd-hero');
+  if(ssMesHero) ssMesHero.textContent=fmt(arsTotal);
+  if(ssUsdHero) ssUsdHero.textContent=fmt(usdTotal,'USD');
 
   // Próximos débitos
   const eventosSubs=subs.map(s=>{
