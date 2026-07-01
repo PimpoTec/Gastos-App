@@ -1215,52 +1215,51 @@ function renderNotifConfig(){
   const tarjetasCredito = tarjetas.filter(t=>t.esTarjeta&&cierres[t.id]);
   let html = '';
 
-  // Tarjetas de crédito con cierre configurado
-  if(tarjetasCredito.length){
-    html += `<div style="font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Cierres de tarjeta</div>`;
-    html += tarjetasCredito.map(t=>{
-      const key=`tarjeta_${t.id}`;
-      const cfg=notifConfig[key]||{activo:true,dias:2};
-      return `<div class="notif-item">
-        <div class="ico" style="background:${t.color}22">${t.icono}</div>
-        <div class="info">
-          <div class="name">${t.nombre}</div>
-          <select class="dias-select" id="dias_${key}" onchange="updateNotifConfig('${key}')" ${!cfg.activo?'disabled':''}>
-            <option value="1" ${cfg.dias===1?'selected':''}>1 día antes</option>
-            <option value="2" ${cfg.dias===2?'selected':''}>2 días antes</option>
-            <option value="3" ${cfg.dias===3?'selected':''}>3 días antes</option>
+  function itemHtml(key, nombre, ico, bg, defaultDias){
+    const cfg = notifConfig[key] || {activo:true, dias:defaultDias, hora:9, personalizado:false};
+    const esCustom = cfg.personalizado || false;
+    return `<div class="notif-item" id="notif_${key}">
+      <div class="ico" style="background:${bg}">${ico}</div>
+      <div class="info">
+        <div class="name">${nombre}</div>
+        <div style="margin-top:6px;display:flex;flex-direction:column;gap:6px">
+          <select class="dias-select" id="tipo_${key}" onchange="onNotifTipoChange('${key}')" ${!cfg.activo?'disabled':''}>
+            <option value="1"  ${!esCustom&&cfg.dias===1?'selected':''}>1 día antes</option>
+            <option value="2"  ${!esCustom&&cfg.dias===2?'selected':''}>2 días antes</option>
+            <option value="3"  ${!esCustom&&cfg.dias===3?'selected':''}>3 días antes</option>
+            <option value="custom" ${esCustom?'selected':''}>Personalizado</option>
           </select>
+          <div id="custom_${key}" style="display:${esCustom?'flex':'none'};gap:8px;align-items:center">
+            <input type="number" id="cDias_${key}" min="1" max="30" value="${cfg.diasCustom||defaultDias}"
+              placeholder="Días" ${!cfg.activo?'disabled':''}
+              onchange="updateNotifConfig('${key}')"
+              style="width:70px;padding:5px 8px;font-size:13px;background:var(--card-2);border:1px solid var(--border-2);border-radius:8px;color:var(--text)">
+            <span style="font-size:12px;color:var(--muted)">días antes a las</span>
+            <input type="number" id="cHora_${key}" min="0" max="23" value="${cfg.hora??9}"
+              placeholder="Hora" ${!cfg.activo?'disabled':''}
+              onchange="updateNotifConfig('${key}')"
+              style="width:60px;padding:5px 8px;font-size:13px;background:var(--card-2);border:1px solid var(--border-2);border-radius:8px;color:var(--text)">
+            <span style="font-size:12px;color:var(--muted)">hs</span>
+          </div>
         </div>
-        <label class="toggle">
-          <input type="checkbox" ${cfg.activo?'checked':''} onchange="toggleNotif('${key}',this.checked)">
-          <span class="toggle-slider"></span>
-        </label>
-      </div>`;
-    }).join('');
+      </div>
+      <label class="toggle">
+        <input type="checkbox" ${cfg.activo?'checked':''} onchange="toggleNotif('${key}',this.checked)">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>`;
   }
 
-  // Suscripciones
+  if(tarjetasCredito.length){
+    html += `<div style="font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Cierres de tarjeta</div>`;
+    html += tarjetasCredito.map(t => itemHtml(`tarjeta_${t.id}`, t.nombre, t.icono, `${t.color}22`, 2)).join('');
+  }
+
   if(subs.length){
     html += `<div style="font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin:16px 0 8px">Suscripciones</div>`;
-    html += subs.map(s=>{
-      const key=`sub_${s.id}`;
-      const cfg=notifConfig[key]||{activo:true,dias:1};
+    html += subs.map(s => {
       const c=getCat(s.cat,'sub');
-      return `<div class="notif-item">
-        <div class="ico" style="background:${c.color}22">${c.icono}</div>
-        <div class="info">
-          <div class="name">${s.nombre}</div>
-          <select class="dias-select" id="dias_${key}" onchange="updateNotifConfig('${key}')" ${!cfg.activo?'disabled':''}>
-            <option value="1" ${cfg.dias===1?'selected':''}>1 día antes</option>
-            <option value="2" ${cfg.dias===2?'selected':''}>2 días antes</option>
-            <option value="3" ${cfg.dias===3?'selected':''}>3 días antes</option>
-          </select>
-        </div>
-        <label class="toggle">
-          <input type="checkbox" ${cfg.activo?'checked':''} onchange="toggleNotif('${key}',this.checked)">
-          <span class="toggle-slider"></span>
-        </label>
-      </div>`;
+      return itemHtml(`sub_${s.id}`, s.nombre, c.icono, `${c.color}22`, 1);
     }).join('');
   }
 
@@ -1271,18 +1270,38 @@ function renderNotifConfig(){
   container.innerHTML = html;
 }
 
+function onNotifTipoChange(key){
+  const sel = document.getElementById(`tipo_${key}`);
+  const customDiv = document.getElementById(`custom_${key}`);
+  const esCustom = sel.value === 'custom';
+  customDiv.style.display = esCustom ? 'flex' : 'none';
+  updateNotifConfig(key);
+}
+
 async function toggleNotif(key, activo){
-  notifConfig[key] = { ...(notifConfig[key]||{dias:key.startsWith('tarjeta')?2:1}), activo };
-  // Habilitar/deshabilitar el select de días
-  const sel = document.getElementById(`dias_${key}`);
-  if(sel) sel.disabled = !activo;
+  notifConfig[key] = { ...(notifConfig[key]||{dias:key.startsWith('tarjeta')?2:1,hora:9}), activo };
+  // Habilitar/deshabilitar los inputs
+  ['tipo_','cDias_','cHora_'].forEach(p=>{
+    const el=document.getElementById(p+key);
+    if(el) el.disabled = !activo;
+  });
   await dbGuardarNotifConfig(notifConfig);
 }
 
 async function updateNotifConfig(key){
-  const sel = document.getElementById(`dias_${key}`);
-  if(!sel) return;
-  notifConfig[key] = { ...(notifConfig[key]||{activo:true}), dias: parseInt(sel.value) };
+  const tipoSel = document.getElementById(`tipo_${key}`);
+  if(!tipoSel) return;
+  const esCustom = tipoSel.value === 'custom';
+  const diasInput = document.getElementById(`cDias_${key}`);
+  const horaInput = document.getElementById(`cHora_${key}`);
+  const cfg = notifConfig[key] || {};
+  notifConfig[key] = {
+    ...cfg,
+    personalizado: esCustom,
+    dias: esCustom ? (parseInt(diasInput?.value)||1) : parseInt(tipoSel.value),
+    diasCustom: esCustom ? (parseInt(diasInput?.value)||1) : cfg.diasCustom,
+    hora: parseInt(horaInput?.value ?? cfg.hora ?? 9),
+  };
   await dbGuardarNotifConfig(notifConfig);
 }
 
