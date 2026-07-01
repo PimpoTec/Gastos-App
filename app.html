@@ -1227,6 +1227,43 @@ function checkRecordatorioMes(){
   document.getElementById('modal-recordatorio').classList.add('open');
 }
 
+// ── Web Push nativo ──────────────────────────────────
+const VAPID_PUBLIC_KEY = 'BJsv7shyE837UZkQE_LAkanF79RokFSFq3hAOmck2VN5MjsM2__YS89n11eQZHyUE23ihiuz7rJvrU7U1owQM38';
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+
+async function initPushNotifications() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    // Pedir permiso
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') return;
+    // Suscribir al push
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+      });
+    }
+    // Guardar en Supabase
+    const subJson = sub.toJSON();
+    await sb.from('dispositivos').upsert(
+      { user_id: currentUser.id, subscription: subJson },
+      { onConflict: 'user_id' }
+    );
+    console.log('Push registrado OK');
+  } catch(e) {
+    console.log('Push error:', e);
+  }
+}
+
 // ── Init ─────────────────────────────────────────────
 (async()=>{
   showLoading('Verificando sesión...');
@@ -1239,7 +1276,8 @@ function checkRecordatorioMes(){
   ]);
   hideLoading();
   renderAll();
-  setTimeout(checkRecordatorioMes, 800); // Pequeño delay para que cargue la UI primero
+  setTimeout(checkRecordatorioMes, 800);
+  setTimeout(initPushNotifications, 2000); // después de que carga todo // Pequeño delay para que cargue la UI primero
 })();
 </script>
 <script>if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}</script>
