@@ -332,6 +332,11 @@
 
     <!-- BALANCE -->
     <div class="panel" id="panel-balance">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <button onclick="cambiarMes(-1)" style="background:var(--card);border:1px solid var(--border-2);color:var(--text);padding:6px 12px;border-radius:99px;cursor:pointer;font-size:13px;font-weight:600">← Anterior</button>
+        <span id="balance-mes-label" style="font-size:13px;font-weight:600;color:var(--muted-2)">Este mes</span>
+        <button onclick="cambiarMes(1)" id="btn-mes-sig" style="background:var(--card);border:1px solid var(--border-2);color:var(--muted);padding:6px 12px;border-radius:99px;cursor:pointer;font-size:13px;font-weight:600;opacity:.4" disabled>Siguiente →</button>
+      </div>
       <div class="section-title">Por categoría de ingreso</div>
       <div id="balance-cats" style="margin-bottom:20px"></div>
       <div class="section-title">Ingresos del mes <button class="btn-cfg" onclick="openModalIngreso()">+ Agregar</button></div>
@@ -349,6 +354,19 @@
         </div>
       </div>
       <div class="section-title">Configuración <button class="btn-cfg" onclick="switchTab('gastos')">← Volver</button></div>
+      <div style="margin-bottom:20px">
+        <p class="section-title">💰 Presupuesto y dólar</p>
+        <div class="config-item" onclick="openModalPresupuesto()">
+          <div class="ico-box" style="background:rgba(45,212,191,0.15)">🎯</div>
+          <div style="flex:1"><div class="name">Presupuesto mensual</div><div class="sub" id="perfil-presupuesto-val">Sin configurar</div></div>
+          <div class="arr">›</div>
+        </div>
+        <div class="config-item" onclick="actualizarDolarManual()">
+          <div class="ico-box" style="background:rgba(81,207,102,0.15)">💵</div>
+          <div style="flex:1"><div class="name">Dólar blue</div><div class="sub" id="perfil-dolar-val">Cargando...</div></div>
+          <div class="arr">↻</div>
+        </div>
+      </div>
       <div style="margin-bottom:20px">
         <p class="section-title">🔔 Notificaciones</p>
         <p style="font-size:13px;color:var(--muted);margin-bottom:12px;line-height:1.5">Activá alertas para tus tarjetas y suscripciones.</p>
@@ -392,9 +410,54 @@
   </nav>
 </div>
 
-<button class="fab" id="fab-btn" onclick="abrirModalCorrecto()">
+<button class="fab" id="fab-btn" onclick="abrirModalRapido()" oncontextmenu="event.preventDefault();abrirModalCorrecto()">
   <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
 </button>
+<!-- Mini botón para modal completo -->
+<button id="fab-full" style="position:fixed;bottom:calc(var(--bottom-nav) + max(var(--safe-bottom),12px) + 82px);right:20px;width:36px;height:36px;border-radius:50%;background:var(--card);border:1.5px solid var(--border-2);cursor:pointer;display:none;align-items:center;justify-content:center;z-index:100;font-size:14px" onclick="abrirModalCorrecto()" title="Formulario completo">
+  ⊞
+</button>
+
+<!-- Modal Carga Rápida -->
+<div class="modal-overlay" id="modal-rapido">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">⚡ Carga rápida</div>
+    <div class="field"><label>Monto</label>
+      <div class="amount-wrap">
+        <input type="number" id="r-monto" class="amount-input" placeholder="0" inputmode="decimal">
+        <select class="moneda-select" id="r-moneda"><option value="ARS">$ ARS</option><option value="USD">U$ USD</option></select>
+      </div>
+    </div>
+    <div class="field"><label>Medio de pago</label><div class="pago-grid" id="r-pago-chips"></div></div>
+    <div class="field"><label>Categoría</label><div class="cat-scroll" id="r-cat-chips"></div></div>
+    <div class="field"><label>Descripción <span style="color:var(--muted);font-size:10px">(opcional)</span></label>
+      <input type="text" id="r-desc" placeholder="Ej: almuerzo, nafta..." maxlength="60">
+    </div>
+    <div class="field" id="r-cuotas-wrap" style="display:none">
+      <label class="checkbox-wrap"><input type="checkbox" id="r-is-cuota" onchange="toggleRapidoCuotas()"> Compra en cuotas</label>
+      <div id="r-cuotas-det" style="display:none;margin-top:10px">
+        <label>Cantidad de cuotas</label>
+        <input type="number" id="r-cuotas-cant" placeholder="Ej: 6" min="2" max="36" inputmode="numeric">
+      </div>
+    </div>
+    <button class="btn-submit" id="btn-save-rapido" onclick="submitRapido()">Guardar</button>
+  </div>
+</div>
+
+<!-- Modal Presupuesto -->
+<div class="modal-overlay" id="modal-presupuesto">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">🎯 Presupuesto mensual</div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.5">Definí cuánto querés gastar por mes (sin contar TC). El semáforo del hero te va a avisar cómo venís.</p>
+    <div class="field"><label>Monto límite mensual ($)</label>
+      <input type="number" id="p-monto" class="amount-input" placeholder="0" inputmode="decimal" style="font-size:28px">
+    </div>
+    <button class="btn-submit" onclick="guardarPresupuesto()">Guardar</button>
+    <button class="btn-secondary" onclick="closeModals()">Cancelar</button>
+  </div>
+</div>
 
 <!-- Modal recordatorio ingresos -->
 <div class="modal-overlay" id="modal-recordatorio">
@@ -608,16 +671,46 @@ async function dbCargarIngresos(){
 async function dbUpsertIngreso(i){await sb.from('ingresos').upsert({id:i.id,user_id:currentUser.id,monto:i.monto,descripcion:i.desc,cat:i.cat,fecha:i.fecha,moneda:i.moneda||'ARS'});}
 async function dbDeleteIngreso(id){await sb.from('ingresos').delete().eq('id',id).eq('user_id',currentUser.id);}
 async function dbCargarConfig(){
-  const{data}=await sb.from('config').select('cierres, notif_config').eq('user_id',currentUser.id).maybeSingle();
-  return {cierres: data?.cierres||{}, notifConfig: data?.notif_config||{}};
+  const{data}=await sb.from('config').select('cierres, notif_config, dolar_blue, dolar_updated, presupuesto_mensual').eq('user_id',currentUser.id).maybeSingle();
+  return {
+    cierres: data?.cierres||{},
+    notifConfig: data?.notif_config||{},
+    dolarBlue: parseFloat(data?.dolar_blue)||0,
+    dolarUpdated: data?.dolar_updated||null,
+    presupuesto: parseFloat(data?.presupuesto_mensual)||0,
+  };
 }
 async function dbGuardarConfig(c){
-  cierres=c; // actualizar estado local
-  await sb.from('config').upsert({user_id:currentUser.id,cierres:c,notif_config:notifConfig,updated_at:new Date().toISOString()});
+  cierres=c;
+  await sb.from('config').upsert({user_id:currentUser.id,cierres:c,notif_config:notifConfig,dolar_blue:dolarBlue,presupuesto_mensual:presupuestoMensual,updated_at:new Date().toISOString()});
 }
 async function dbGuardarNotifConfig(nc){
-  notifConfig=nc; // actualizar estado local
-  await sb.from('config').upsert({user_id:currentUser.id,cierres:cierres,notif_config:nc,updated_at:new Date().toISOString()});
+  notifConfig=nc;
+  await sb.from('config').upsert({user_id:currentUser.id,cierres:cierres,notif_config:nc,dolar_blue:dolarBlue,presupuesto_mensual:presupuestoMensual,updated_at:new Date().toISOString()});
+}
+async function dbGuardarDolar(valor){
+  dolarBlue=valor;
+  const hoy=new Date().toISOString().split('T')[0];
+  await sb.from('config').upsert({user_id:currentUser.id,cierres:cierres,notif_config:notifConfig,dolar_blue:valor,dolar_updated:hoy,presupuesto_mensual:presupuestoMensual,updated_at:new Date().toISOString()});
+}
+async function dbGuardarPresupuesto(monto){
+  presupuestoMensual=monto;
+  await sb.from('config').upsert({user_id:currentUser.id,cierres:cierres,notif_config:notifConfig,dolar_blue:dolarBlue,dolar_updated:null,presupuesto_mensual:monto,updated_at:new Date().toISOString()});
+}
+
+// Actualizar dólar blue si es el primero del mes o no hay valor
+async function actualizarDolarSiNecesario(dolarUpdated){
+  const hoy=new Date();
+  const ultimaActualizacion=dolarUpdated?new Date(dolarUpdated):null;
+  const necesitaActualizar=!ultimaActualizacion||
+    ultimaActualizacion.getMonth()!==hoy.getMonth()||
+    ultimaActualizacion.getFullYear()!==hoy.getFullYear();
+  if(!necesitaActualizar)return;
+  try{
+    const res=await fetch('https://dolarapi.com/v1/dolares/blue');
+    const data=await res.json();
+    if(data?.venta){await dbGuardarDolar(parseFloat(data.venta));}
+  }catch(e){console.log('No se pudo actualizar el dólar:',e);}
 }
 async function dbCargarTarjetas(){
   const{data,error}=await sb.from('tarjetas').select('*').eq('user_id',currentUser.id).order('created_at',{ascending:true});
@@ -636,6 +729,7 @@ async function dbDeleteCat(id){await sb.from('categorias').delete().eq('id',id).
 
 // ── Estado ───────────────────────────────────────────
 let gastos=[],subs=[],ingresos=[],pagosSubs=[],cierres={},notifConfig={},tarjetas=[],cats=[];
+let dolarBlue=0, presupuestoMensual=0, mesOffset=0; // mesOffset: 0=este mes, -1=mes anterior, -2=hace 2 meses
 let tabActual='gastos';
 let selPagoGasto=null,selCatGasto=null,selPagoSub=null,selCatSub=null,selCatIngreso='sueldo';
 let selEmojiGridT='💳',selColorGridT='#748ffc';
@@ -1072,6 +1166,32 @@ function updateHero(){
   document.getElementById('hero-tarjetas').textContent=fmt(totalTarjetas);
   document.getElementById('hero-subs').textContent=fmt(totalSubs);
   document.getElementById('hero-usd').textContent=fmt(totalUSD,'USD');
+
+  // Semáforo de presupuesto
+  const heroCard=document.querySelector('#header-hero-gastos .hero-card');
+  if(heroCard&&presupuestoMensual>0){
+    const sem=getSemaforoColor(totalARS,presupuestoMensual);
+    if(sem){
+      let semEl=document.getElementById('hero-semaforo');
+      if(!semEl){
+        semEl=document.createElement('div');
+        semEl.id='hero-semaforo';
+        semEl.style.cssText='margin-top:10px;padding:8px 12px;border-radius:10px;font-size:12px;font-weight:600;position:relative;z-index:1';
+        heroCard.appendChild(semEl);
+      }
+      semEl.style.background=sem.bg+'88';
+      semEl.style.color=sem.color;
+      semEl.textContent=sem.label;
+      // Cambiar gradiente del hero según semáforo
+      heroCard.style.background=`linear-gradient(135deg,${sem.bg} 0%,${sem.bg}cc 100%)`;
+    }
+  } else {
+    // Restaurar gradiente original
+    const heroCard2=document.querySelector('#header-hero-gastos .hero-card');
+    if(heroCard2) heroCard2.style.background='linear-gradient(135deg,#0f766e 0%,#0e7490 100%)';
+    const semEl=document.getElementById('hero-semaforo');
+    if(semEl) semEl.remove();
+  }
 }
 
 function getGastosPeriodoActual(tId,gList){
@@ -1208,7 +1328,123 @@ function renderCuotas(){
   </div>`).join('');
 }
 
-// ── Feed de movimientos ──────────────────────────────
+// ── Carga rápida ────────────────────────────────────
+let selPagoRapido=null, selCatRapido=null;
+
+function abrirModalRapido(){
+  if(tabActual==='subs'){openModalSub();return;}
+  if(tabActual==='balance'){openModalIngreso();return;}
+  // Modal rápido para gastos
+  selPagoRapido=tarjetas[0]?.id||null;
+  selCatRapido=cats.find(c=>c.tipo==='gasto')?.id||null;
+  document.getElementById('r-monto').value='';
+  document.getElementById('r-desc').value='';
+  document.getElementById('r-moneda').value='ARS';
+  document.getElementById('r-is-cuota').checked=false;
+  toggleRapidoCuotas();
+  renderChips('r-pago-chips',tarjetas,selPagoRapido,'rapido');
+  renderCatChips('r-cat-chips',cats.filter(c=>c.tipo==='gasto'),selCatRapido,'rapido');
+  openModalWithHistory('modal-rapido');
+  setTimeout(()=>document.getElementById('r-monto').focus(),300);
+}
+
+function toggleRapidoCuotas(){
+  const isCuota=document.getElementById('r-is-cuota').checked;
+  document.getElementById('r-cuotas-det').style.display=isCuota?'block':'none';
+}
+
+function onRapidoPagoChange(id){
+  selPagoRapido=id;
+  const t=getTarjeta(id);
+  const cuotasWrap=document.getElementById('r-cuotas-wrap');
+  cuotasWrap.style.display=t.esTarjeta?'block':'none';
+  if(!t.esTarjeta){document.getElementById('r-is-cuota').checked=false;toggleRapidoCuotas();}
+  renderChips('r-pago-chips',tarjetas,id,'rapido');
+}
+
+async function submitRapido(){
+  const btn=document.getElementById('btn-save-rapido');
+  const monto=parseFloat(document.getElementById('r-monto').value);
+  const moneda=document.getElementById('r-moneda').value;
+  const desc=document.getElementById('r-desc').value.trim()||'Gasto rápido';
+  const isCuota=document.getElementById('r-is-cuota').checked;
+  const cuotas=parseInt(document.getElementById('r-cuotas-cant').value);
+  if(isNaN(monto)||monto<=0){err('r-monto');return;}
+  if(isCuota&&(isNaN(cuotas)||cuotas<2)){err('r-cuotas-cant');return;}
+  const t=getTarjeta(selPagoRapido);
+  const cuotaMonto=isCuota&&t.esTarjeta?monto/cuotas:monto;
+  const newG={id:Date.now(),monto:cuotaMonto,montoOriginal:isCuota?monto:null,cuotas:isCuota?cuotas:null,pago:selPagoRapido,desc,cat:selCatRapido,fecha:today(),moneda,esFijo:false};
+  btn.disabled=true;btn.textContent='Guardando...';
+  await dbUpsertGasto(newG);
+  gastos.unshift(newG);
+  btn.disabled=false;btn.textContent='Guardar';
+  closeModals();renderAll();
+}
+
+// Sobrescribir selectPago para el modal rápido
+const _selectPagoOrig=selectPago;
+function selectPago(cid,id,ctx){
+  if(ctx==='rapido'){onRapidoPagoChange(id);return;}
+  if(ctx==='gasto')selPagoGasto=id;else selPagoSub=id;
+  renderChips(cid,tarjetas,id,ctx);
+}
+
+// ── Semáforo de presupuesto ──────────────────────────
+function getSemaforoColor(gastado, presupuesto){
+  if(!presupuesto) return null;
+  const pct=(gastado/presupuesto)*100;
+  if(pct>=100) return {color:'#dc2626', bg:'#7f1d1d', label:`⛔ Pasaste el presupuesto en ${fmt(gastado-presupuesto)}`};
+  if(pct>=80)  return {color:'#f59e0b', bg:'#78350f', label:`⚠ Usaste el ${Math.round(pct)}% del presupuesto`};
+  if(pct>=50)  return {color:'#fbbf24', bg:'#451a03', label:`🟡 Vas bien, ${Math.round(pct)}% usado`};
+  return         {color:'#34d399', bg:'#064e3b', label:`✅ Bien, ${Math.round(pct)}% usado`};
+}
+
+// ── Navegación de meses ──────────────────────────────
+function cambiarMes(delta){
+  const nuevoOffset=mesOffset+delta;
+  if(nuevoOffset>0||nuevoOffset<-2) return;
+  mesOffset=nuevoOffset;
+  renderBalance();
+}
+
+function getMesRef(){
+  const hoy=new Date();
+  const d=new Date(hoy.getFullYear(),hoy.getMonth()+mesOffset,1);
+  return d;
+}
+
+// ── Presupuesto ──────────────────────────────────────
+function openModalPresupuesto(){
+  document.getElementById('p-monto').value=presupuestoMensual||'';
+  openModalWithHistory('modal-presupuesto');
+}
+
+async function guardarPresupuesto(){
+  const monto=parseFloat(document.getElementById('p-monto').value);
+  if(isNaN(monto)||monto<=0){err('p-monto');return;}
+  await dbGuardarPresupuesto(monto);
+  closeModals();
+  renderPerfil();updateHero();
+}
+
+// ── Dólar manual ────────────────────────────────────
+async function actualizarDolarManual(){
+  const btn=document.getElementById('perfil-dolar-val');
+  if(btn) btn.textContent='Actualizando...';
+  try{
+    const res=await fetch('https://dolarapi.com/v1/dolares/blue');
+    const data=await res.json();
+    if(data?.venta){
+      await dbGuardarDolar(parseFloat(data.venta));
+      renderPerfil();
+    }
+  }catch(e){
+    if(btn) btn.textContent='Error al actualizar';
+  }
+}
+
+// ── Funciones existentes que necesitan el mesOffset ─
+
 function renderFeed(){
   const query=(document.getElementById('buscador-gastos')?.value||'').toLowerCase();
   const lista=document.getElementById('feed-lista');
@@ -1379,90 +1615,58 @@ function renderSubs(){
 }
 
 function renderBalance(){
+  const mesRef=getMesRef();
   const hoy=new Date();
+  const labelMes=mesOffset===0?'Este mes':mesOffset===-1?'Mes anterior':mesRef.toLocaleDateString('es-AR',{month:'long',year:'numeric'});
+  const labelEl=document.getElementById('balance-mes-label');if(labelEl)labelEl.textContent=labelMes;
+  const btnSig=document.getElementById('btn-mes-sig');
+  if(btnSig){btnSig.disabled=mesOffset===0;btnSig.style.opacity=mesOffset===0?'.4':'1';}
+  const btnAnt=document.querySelector('[onclick="cambiarMes(-1)"]');
+  if(btnAnt){btnAnt.style.opacity=mesOffset===-2?'.4':'1';btnAnt.disabled=mesOffset===-2;}
   const mesI=ingresos.filter(i=>{
     if(i.moneda==='USD')return false;
-    const d=new Date(i.fecha+'T00:00:00');return d.getMonth()===hoy.getMonth()&&d.getFullYear()===hoy.getFullYear();
+    const d=new Date(i.fecha+'T00:00:00');return d.getMonth()===mesRef.getMonth()&&d.getFullYear()===mesRef.getFullYear();
   });
   const totalIngresos=mesI.reduce((a,i)=>a+i.monto,0);
-  // Solo descuentan del balance los gastos que NO son con tarjeta de crédito
-  // (los de tarjeta se pagan cuando llega el resumen, no en el momento)
   const tarjetasCredito=new Set(tarjetas.filter(t=>t.esTarjeta).map(t=>String(t.id)));
   const mesGSinTC=gastos.filter(g=>{
     if(g.moneda==='USD')return false;
-    if(tarjetasCredito.has(String(g.pago)))return false; // excluir tarjetas de crédito
+    if(tarjetasCredito.has(String(g.pago)))return false;
     const d=new Date(g.fecha+'T00:00:00');
-    return d.getMonth()===hoy.getMonth()&&d.getFullYear()===hoy.getFullYear();
+    return d.getMonth()===mesRef.getMonth()&&d.getFullYear()===mesRef.getFullYear();
   });
-  const totalSubs=subs.filter(s=>{
-    if(s.moneda==='USD')return false;
-    return hoy.getDate()>=s.dia; // solo cuenta si el día de débito ya pasó este mes
-  }).reduce((a,s)=>a+s.monto,0);
+  const diaRef=mesOffset===0?hoy.getDate():new Date(mesRef.getFullYear(),mesRef.getMonth()+1,0).getDate();
+  const totalSubs=subs.filter(s=>s.moneda!=='USD'&&diaRef>=s.dia).reduce((a,s)=>a+s.monto,0);
   const totalGastos=mesGSinTC.reduce((a,g)=>a+g.monto,0)+totalSubs;
   const balance=totalIngresos-totalGastos;
   const hero=document.getElementById('balance-hero');
   hero.className='balance-hero '+(balance>0?'positivo':balance<0?'negativo':'neutro');
   document.getElementById('balance-val').textContent=fmt(Math.abs(balance));
-  document.getElementById('balance-sub').textContent=balance>0?'Ahorro del mes ✨':balance<0?'Déficit del mes ⚠':'Sin movimientos';
+  document.getElementById('balance-sub').textContent=balance>0?'Ahorro ✨':balance<0?'Déficit ⚠':'Sin movimientos';
   document.getElementById('balance-ing').textContent=fmt(totalIngresos);
   document.getElementById('balance-gas').textContent=fmt(totalGastos);
   document.getElementById('balance-gas-label').textContent=tarjetasCredito.size>0?'🔴 Gastos (sin TC)':'🔴 Gastos';
-
-  // Suscripciones que todavía no se debitaron este mes
-  const subsPendientes=subs.filter(s=>s.moneda!=='USD'&&hoy.getDate()<s.dia);
-  const totalPendiente=subsPendientes.reduce((a,s)=>a+s.monto,0);
   let pendienteHtml=document.getElementById('balance-pendiente');
-  if(!pendienteHtml){
-    const div=document.createElement('div');
-    div.id='balance-pendiente';
-    div.style.cssText='font-size:12px;color:rgba(255,255,255,0.7);margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.12)';
-    hero.appendChild(div);
-    pendienteHtml=div;
-  }
-  if(subsPendientes.length){
-    pendienteHtml.innerHTML=`⏳ Aún no se descontó: <strong style="color:white">${fmt(totalPendiente)}</strong> en suscripciones pendientes este mes`;
-    pendienteHtml.style.display='block';
-  }else{
-    pendienteHtml.style.display='none';
-  }
-
-  // Por categoría
+  if(mesOffset===0){
+    const subsPendientes=subs.filter(s=>s.moneda!=='USD'&&hoy.getDate()<s.dia);
+    const totalPendiente=subsPendientes.reduce((a,s)=>a+s.monto,0);
+    if(!pendienteHtml){const div=document.createElement('div');div.id='balance-pendiente';div.style.cssText='font-size:12px;color:rgba(255,255,255,0.7);margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.12)';hero.appendChild(div);pendienteHtml=div;}
+    if(subsPendientes.length){pendienteHtml.innerHTML=`⏳ Aún no descontado: <strong style="color:white">${fmt(totalPendiente)}</strong> en subs pendientes`;pendienteHtml.style.display='block';}
+    else{pendienteHtml.style.display='none';}
+  }else if(pendienteHtml){pendienteHtml.style.display='none';}
   const porCat={};
   mesI.forEach(i=>{porCat[i.cat]=(porCat[i.cat]||0)+i.monto;});
   const maxCat=Math.max(...Object.values(porCat),1);
   document.getElementById('balance-cats').innerHTML=Object.entries(porCat).sort((a,b)=>b[1]-a[1]).map(([catId,total])=>{
-    const c=getCatIngreso(catId);
-    const pct=Math.round((total/maxCat)*100);
-    return`<div class="cat-ingreso-row">
-      <div style="font-size:20px;margin-right:4px">${c.icono}</div>
-      <div style="flex:1">
-        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-          <span style="font-size:14px;font-weight:500">${c.nombre}</span>
-          <span style="font-size:14px;font-weight:700;color:var(--success)">${fmt(total)}</span>
-        </div>
-        <div class="bar-wrap"><div class="bar" style="width:${pct}%;background:${c.color}"></div></div>
-      </div>
-    </div>`;
-  }).join('')||'<div style="font-size:13px;color:var(--muted);padding:8px 0">Sin ingresos registrados este mes</div>';
-
-  // Lista ingresos
+    const c=getCatIngreso(catId);const pct=Math.round((total/maxCat)*100);
+    return`<div class="cat-ingreso-row"><div style="font-size:20px;margin-right:4px">${c.icono}</div><div style="flex:1"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:14px;font-weight:500">${c.nombre}</span><span style="font-size:14px;font-weight:700;color:var(--success)">${fmt(total)}</span></div><div class="bar-wrap"><div class="bar" style="width:${pct}%;background:${c.color}"></div></div></div></div>`;
+  }).join('')||'<div style="font-size:13px;color:var(--muted);padding:8px 0">Sin ingresos este mes</div>';
   const lista=document.getElementById('i-lista');
-  const iMes=[...ingresos].filter(i=>{
-    const d=new Date(i.fecha+'T00:00:00');return d.getMonth()===hoy.getMonth()&&d.getFullYear()===hoy.getFullYear();
-  });
-  if(!iMes.length){lista.innerHTML=`<div class="empty"><div class="ico">💚</div><p>Sin ingresos este mes.<br>Tocá + para agregar.</p></div>`;return;}
+  const iMes=[...ingresos].filter(i=>{const d=new Date(i.fecha+'T00:00:00');return d.getMonth()===mesRef.getMonth()&&d.getFullYear()===mesRef.getFullYear();}).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
+  if(!iMes.length){lista.innerHTML=`<div class="empty"><div class="ico">💚</div><p>Sin ingresos este mes.</p></div>`;return;}
   lista.innerHTML=iMes.map(i=>{
-    const c=getCatIngreso(i.cat);
-    const fl=new Date(i.fecha+'T00:00:00').toLocaleDateString('es-AR',{day:'numeric',month:'short'});
-    const usdTag=i.moneda==='USD'?`<span class="usd-tag">USD</span>`:'';
-    return`<div class="ingreso-item" onclick="openModalIngreso(${i.id})">
-      <div class="ico">${c.icono}</div>
-      <div class="info">
-        <div class="desc">${i.desc}</div>
-        <div class="meta">${c.nombre} · ${fl} ${usdTag}</div>
-      </div>
-      <div class="amount">${fmt(i.monto,i.moneda)}</div>
-    </div>`;
+    const c=getCatIngreso(i.cat);const fl=new Date(i.fecha+'T00:00:00').toLocaleDateString('es-AR',{day:'numeric',month:'short'});const usdTag=i.moneda==='USD'?`<span class="usd-tag">USD</span>`:'';
+    return`<div class="ingreso-item" onclick="openModalIngreso(${i.id})"><div class="ico">${c.icono}</div><div class="info"><div class="desc">${i.desc}</div><div class="meta">${c.nombre} · ${fl} ${usdTag}</div></div><div class="amount">${fmt(i.monto,i.moneda)}</div></div>`;
   }).join('');
 }
 
@@ -1568,6 +1772,10 @@ function renderPerfil(){
   document.getElementById('perfil-email').textContent=currentUser?.email||'';
   document.getElementById('n-nombre').value=nombrePerfil;
   renderNotifConfig();
+  const pEl=document.getElementById('perfil-presupuesto-val');
+  if(pEl) pEl.textContent=presupuestoMensual>0?`${fmt(presupuestoMensual)}/mes`:'Sin configurar';
+  const dEl=document.getElementById('perfil-dolar-val');
+  if(dEl) dEl.textContent=dolarBlue>0?`$${dolarBlue.toLocaleString('es-AR')} (blue)`:'No cargado — tocá para actualizar';
   const lt=document.getElementById('lista-tarjetas');
   lt.innerHTML=tarjetas.map(t=>`<div class="config-item" onclick="openModalTarjeta(${t.id})"><div class="ico-box" style="background:${t.color}22">${t.icono}</div><div style="flex:1"><div class="name">${t.nombre}</div><div class="sub">${t.esTarjeta?'Tarjeta de crédito':'Otro medio'}</div></div><div class="arr">›</div></div>`).join('')
   ||'<div style="font-size:13px;color:var(--muted);padding:8px 0 12px">Sin medios de pago</div>';
@@ -1649,6 +1857,10 @@ async function initPushNotifications() {
   const configData = await dbCargarConfig();
   cierres = configData.cierres;
   notifConfig = configData.notifConfig;
+  dolarBlue = configData.dolarBlue;
+  presupuestoMensual = configData.presupuesto;
+  // Actualizar dólar si es necesario (en background)
+  actualizarDolarSiNecesario(configData.dolarUpdated);
   hideLoading();
   renderAll();
   setTimeout(checkRecordatorioMes, 800);
