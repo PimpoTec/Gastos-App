@@ -1285,6 +1285,8 @@ async function updateNotifConfig(key){
   notifConfig[key] = { ...(notifConfig[key]||{activo:true}), dias: parseInt(sel.value) };
   await dbGuardarNotifConfig(notifConfig);
 }
+
+function renderPerfil(){
   const nombre=nombrePerfil||currentUser?.email?.split('@')[0]||'Usuario';
   document.getElementById('perfil-nombre-display').textContent=nombre;
   document.getElementById('perfil-email').textContent=currentUser?.email||'';
