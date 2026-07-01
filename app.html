@@ -196,6 +196,32 @@
     .spinner{width:38px;height:38px;border:3px solid var(--border-2);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
     @keyframes spin{to{transform:rotate(360deg)}}
     #loading-msg{font-size:14px;color:var(--muted);font-weight:500}
+    /* Feed de movimientos */
+    .feed-dia{font-size:11px;font-weight:700;color:var(--muted-2);text-transform:uppercase;letter-spacing:.07em;margin:16px 0 8px;display:flex;align-items:center;gap:8px}
+    .feed-dia::after{content:'';flex:1;height:1px;background:var(--border)}
+    .feed-item{display:flex;align-items:center;gap:12px;background:var(--card);border-radius:14px;padding:12px 14px;margin-bottom:6px;border:1px solid var(--border);cursor:pointer}
+    .feed-item .ico{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+    .feed-item .info{flex:1;min-width:0}
+    .feed-item .desc{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .feed-item .meta{font-size:11.5px;color:var(--muted);margin-top:2px;font-weight:500}
+    .feed-item .amount{font-size:15px;font-weight:800;letter-spacing:-0.3px;flex-shrink:0;text-align:right}
+    .feed-item .amount.neg{color:var(--danger)}
+    .feed-item .amount.pos{color:var(--success)}
+    .feed-item .amount.tc{color:var(--warning)}
+    .feed-cierre{background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.2);border-radius:14px;padding:14px;margin-bottom:8px}
+    .feed-cierre .titulo{font-size:13px;font-weight:700;color:var(--warning);margin-bottom:8px}
+    .feed-cierre .sub-row{display:flex;justify-content:space-between;font-size:13px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.04)}
+    .feed-cierre .total-row{display:flex;justify-content:space-between;font-size:14px;font-weight:700;margin-top:8px;color:var(--warning)}
+    .sub-pendiente{background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.25);border-radius:14px;padding:14px;margin-bottom:8px}
+    .sp-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+    .sp-ico{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+    .sp-info{flex:1}
+    .sp-name{font-size:14px;font-weight:700}
+    .sp-meta{font-size:12px;color:var(--muted);margin-top:2px}
+    .sp-amount{font-size:15px;font-weight:800;color:var(--warning)}
+    .sp-btns{display:flex;gap:8px}
+    .sp-btn-si{flex:1;padding:10px;background:var(--success);color:#06141a;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer}
+    .sp-btn-no{flex:1;padding:10px;background:rgba(255,255,255,0.06);color:var(--muted);border:1px solid var(--border-2);border-radius:10px;font-size:13px;font-weight:600;cursor:pointer}
   </style>
 </head>
 
@@ -230,11 +256,9 @@
       <div class="pago-breakdown" id="pago-breakdown"></div>
       <div class="section-title">Próximos vencimientos</div>
       <div id="vencimientos-list" style="margin-bottom:20px"></div>
-      <div class="section-title">Gastos fijos este mes</div>
-      <div id="gastos-fijos-list" style="margin-bottom:20px"></div>
       <div class="section-title">Movimientos</div>
-      <input type="text" id="buscador-gastos" class="search-box" placeholder="Buscar..." oninput="renderGastos()">
-      <div id="g-lista"></div>
+      <input type="text" id="buscador-gastos" class="search-box" placeholder="Buscar..." oninput="renderFeed()">
+      <div id="feed-lista"></div>
     </div>
 
     <!-- CUOTAS -->
@@ -252,6 +276,10 @@
       <div class="stats-grid">
         <div class="stat-card"><div class="lbl">Por mes</div><div class="val acc" id="ss-mes">$0</div></div>
         <div class="stat-card"><div class="lbl">Por año</div><div class="val dng" id="ss-anual">$0</div></div>
+      </div>
+      <div id="subs-pendientes-wrap" style="display:none">
+        <div class="section-title" style="color:var(--warning)">⚠ Pendientes de confirmar</div>
+        <div id="subs-pendientes-list" style="margin-bottom:20px"></div>
       </div>
       <div class="section-title">Próximos débitos</div>
       <div id="subs-vencimientos-list" style="margin-bottom:20px"></div>
@@ -513,6 +541,24 @@ async function dbCargarSubs(){
 }
 async function dbUpsertSub(s){await sb.from('suscripciones').upsert({id:s.id,user_id:currentUser.id,nombre:s.nombre,monto:s.monto,pago:s.pago,dia:s.dia,cat:s.cat,moneda:s.moneda||'ARS'});}
 async function dbDeleteSub(id){await sb.from('suscripciones').delete().eq('id',id).eq('user_id',currentUser.id);}
+
+// ── Pagos de suscripciones ───────────────────────────
+async function dbCargarPagosSubs(){
+  const hoy=new Date();
+  const{data,error}=await sb.from('suscripciones_pagos').select('*')
+    .eq('user_id',currentUser.id)
+    .eq('anio',hoy.getFullYear());
+  if(error){console.error(error);return[];}
+  return data||[];
+}
+async function dbConfirmarPagoSub(subId,pagado,fechaPago=null){
+  const hoy=new Date();
+  await sb.from('suscripciones_pagos').upsert({
+    user_id:currentUser.id,sub_id:subId,
+    mes:hoy.getMonth()+1,anio:hoy.getFullYear(),
+    pagado,fecha_pago:fechaPago||hoy.toISOString().split('T')[0]
+  },{onConflict:'user_id,sub_id,mes,anio'});
+}
 async function dbCargarIngresos(){
   const{data,error}=await sb.from('ingresos').select('*').eq('user_id',currentUser.id).order('fecha',{ascending:false});
   if(error){console.error('Error cargando ingresos:',error);return[];}
@@ -555,7 +601,7 @@ async function dbUpsertCat(c){await sb.from('categorias').upsert({id:c.id,user_i
 async function dbDeleteCat(id){await sb.from('categorias').delete().eq('id',id).eq('user_id',currentUser.id);}
 
 // ── Estado ───────────────────────────────────────────
-let gastos=[],subs=[],ingresos=[],cierres={},notifConfig={},tarjetas=[],cats=[];
+let gastos=[],subs=[],ingresos=[],pagosSubs=[],cierres={},notifConfig={},tarjetas=[],cats=[];
 let tabActual='gastos';
 let selPagoGasto=null,selCatGasto=null,selPagoSub=null,selCatSub=null,selCatIngreso='sueldo';
 let selEmojiGridT='💳',selColorGridT='#748ffc';
@@ -914,7 +960,7 @@ async function saveCierres(){
 }
 
 // ── Render ───────────────────────────────────────────
-function renderAll(){updateHero();renderDashboard();renderGastos();renderCuotas();renderSubs();}
+function renderAll(){updateHero();renderDashboard();renderFeed();renderCuotas();renderSubs();}
 
 function getGastosMes(){
   const hoy=new Date();
@@ -936,8 +982,17 @@ function updateHero(){
     const d=new Date(g.fecha+'T00:00:00');
     return d.getMonth()===hoy.getMonth()&&d.getFullYear()===hoy.getFullYear();
   });
-  // Suscripciones que ya se debitaron este mes (mismo criterio)
-  const totalSubs=subs.filter(s=>s.moneda!=='USD'&&hoy.getDate()>=s.dia).reduce((a,s)=>a+s.monto,0);
+  // Suscripciones: solo las confirmadas como pagadas este mes
+  const hoy2=new Date();
+  const mesNum=hoy2.getMonth()+1;
+  const anioNum=hoy2.getFullYear();
+  const subsConfirmadas=subs.filter(s=>{
+    if(s.moneda==='USD')return false;
+    const pago=pagosSubs.find(p=>p.sub_id===s.id&&p.mes===mesNum&&p.anio===anioNum);
+    if(pago)return pago.pagado; // confirmada: solo si pagado=true
+    return hoy.getDate()>=s.dia; // sin confirmar: asume pagada si el día ya pasó
+  });
+  const totalSubs=subsConfirmadas.reduce((a,s)=>a+s.monto,0);
   const totalARS=mesG.reduce((a,g)=>a+g.monto,0)+totalSubs;
 
   // USD
@@ -1108,8 +1163,174 @@ function renderCuotas(){
   lista.innerHTML=activas.map(g=>`<div class="gasto-item" onclick="openModalGasto(${g.id})"><div class="info"><div class="desc">${g.desc}</div><div class="meta"><span style="color:${g.t.color}">${g.t.icono} ${g.t.nombre}</span> · ${new Date(g.fecha+'T00:00:00').toLocaleDateString('es-AR',{month:'short',year:'numeric'})}</div></div><div class="right"><div class="amount" style="color:var(--accent)">${g.numCuota}/${g.cuotas}</div><div style="font-size:12px;color:var(--muted);margin-top:3px">${fmt(g.monto,g.moneda)}</div></div></div>`).join('');
 }
 
+// ── Feed de movimientos ──────────────────────────────
+function renderFeed(){
+  const query=(document.getElementById('buscador-gastos')?.value||'').toLowerCase();
+  const lista=document.getElementById('feed-lista');
+  const hoy=new Date();
+  const tarjetasCredito=new Set(tarjetas.filter(t=>t.esTarjeta).map(t=>String(t.id)));
+
+  // Armar todos los eventos del mes
+  const eventos=[];
+
+  // Gastos
+  gastos.forEach(g=>{
+    const d=new Date(g.fecha+'T00:00:00');
+    const esTC=tarjetasCredito.has(String(g.pago));
+    if(query){
+      const t=getTarjeta(g.pago);const c=getCat(g.cat,'gasto');
+      if(!g.desc.toLowerCase().includes(query)&&!t.nombre.toLowerCase().includes(query)&&!c.nombre.toLowerCase().includes(query))return;
+    }
+    eventos.push({fecha:d,tipo:'gasto',id:g.id,desc:g.desc,monto:g.monto,moneda:g.moneda,pago:g.pago,cat:g.cat,esTC});
+  });
+
+  // Ingresos
+  ingresos.forEach(i=>{
+    const d=new Date(i.fecha+'T00:00:00');
+    if(query&&!i.desc.toLowerCase().includes(query))return;
+    eventos.push({fecha:d,tipo:'ingreso',id:i.id,desc:i.desc,monto:i.monto,moneda:i.moneda,cat:i.cat});
+  });
+
+  // Suscripciones pagadas este mes
+  pagosSubs.filter(p=>p.pagado&&p.mes===hoy.getMonth()+1).forEach(p=>{
+    const sub=subs.find(s=>s.id===p.sub_id);
+    if(!sub)return;
+    if(query&&!sub.nombre.toLowerCase().includes(query))return;
+    const d=new Date((p.fecha_pago||`${hoy.getFullYear()}-${String(p.mes).padStart(2,'0')}-${String(sub.dia).padStart(2,'0')}`)+'T00:00:00');
+    eventos.push({fecha:d,tipo:'sub_pagada',id:p.sub_id,desc:sub.nombre,monto:sub.monto,moneda:sub.moneda,cat:sub.cat});
+  });
+
+  // Cierres de tarjeta que ya pasaron este mes
+  tarjetas.filter(t=>t.esTarjeta&&cierres[t.id]).forEach(t=>{
+    const cfg=cierres[t.id];
+    const fCierreAnterior=new Date(hoy.getFullYear(),hoy.getMonth(),cfg.dia);
+    if(hoy.getDate()<=cfg.dia) fCierreAnterior.setMonth(fCierreAnterior.getMonth()-1);
+    // Solo mostrar si el cierre anterior fue este mes o el mes pasado (reciente)
+    const diffDias=Math.floor((hoy-fCierreAnterior)/(1000*60*60*24));
+    if(diffDias>=0&&diffDias<=60){
+      // Buscar gastos del período cerrado
+      const fDesde=new Date(fCierreAnterior);fDesde.setMonth(fDesde.getMonth()-1);fDesde.setDate(cfg.dia+1);
+      const gastosDelPeriodo=gastos.filter(g=>{
+        if(g.pago!=t.id||g.moneda==='USD')return false;
+        if(g.cuotas){const n=calcularCuotaActual(g.fecha,cfg.dia,fCierreAnterior);return n>=1&&n<=g.cuotas;}
+        const fd=new Date(g.fecha+'T00:00:00');
+        return fd>=fDesde&&fd<=fCierreAnterior;
+      });
+      if(gastosDelPeriodo.length>0){
+        eventos.push({fecha:new Date(fCierreAnterior.getTime()+86400000),tipo:'cierre',tarjeta:t,gastosPeriodo:gastosDelPeriodo,fDesde,fHasta:fCierreAnterior});
+      }
+    }
+  });
+
+  // Ordenar por fecha descendente
+  eventos.sort((a,b)=>b.fecha-a.fecha);
+
+  if(!eventos.length){
+    lista.innerHTML=`<div class="empty"><div class="ico">📋</div><p>Sin movimientos aún.</p></div>`;
+    return;
+  }
+
+  // Agrupar por día
+  let htmlStr='';
+  let diaActual='';
+  eventos.forEach(e=>{
+    const dStr=e.fecha.toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long'});
+    if(dStr!==diaActual){
+      diaActual=dStr;
+      const esHoy=e.fecha.toDateString()===hoy.toDateString();
+      const esMañana=e.fecha.toDateString()===new Date(hoy.getTime()+86400000).toDateString();
+      const label=esHoy?'Hoy':esMañana?'Mañana':dStr;
+      htmlStr+=`<div class="feed-dia">${label}</div>`;
+    }
+    if(e.tipo==='cierre'){
+      const total=e.gastosPeriodo.reduce((a,g)=>a+g.monto,0);
+      const strDesde=e.fDesde.toLocaleDateString('es-AR',{day:'numeric',month:'short'});
+      const strHasta=e.fHasta.toLocaleDateString('es-AR',{day:'numeric',month:'short'});
+      htmlStr+=`<div class="feed-cierre">
+        <div class="titulo">💳 Cierre ${e.tarjeta.nombre} · ${strDesde} → ${strHasta}</div>
+        ${e.gastosPeriodo.slice(0,4).map(g=>`<div class="sub-row"><span>${g.desc}</span><span>${fmt(g.monto,g.moneda)}</span></div>`).join('')}
+        ${e.gastosPeriodo.length>4?`<div class="sub-row" style="color:var(--muted)">...y ${e.gastosPeriodo.length-4} más</div>`:''}
+        <div class="total-row"><span>Total a pagar</span><span>${fmt(total)}</span></div>
+      </div>`;
+    } else if(e.tipo==='ingreso'){
+      const c=getCatIngreso(e.cat);
+      htmlStr+=`<div class="feed-item" onclick="openModalIngreso(${e.id})">
+        <div class="ico" style="background:${c.color}22">${c.icono}</div>
+        <div class="info"><div class="desc">${e.desc}</div><div class="meta">${c.nombre}</div></div>
+        <div class="amount pos">+${fmt(e.monto,e.moneda)}</div>
+      </div>`;
+    } else if(e.tipo==='sub_pagada'){
+      const c=getCat(e.cat,'sub');
+      htmlStr+=`<div class="feed-item">
+        <div class="ico" style="background:${c.color}22">${c.icono}</div>
+        <div class="info"><div class="desc">${e.desc}</div><div class="meta">🔄 Suscripción · Pagada</div></div>
+        <div class="amount neg">-${fmt(e.monto,e.moneda)}</div>
+      </div>`;
+    } else {
+      const t2=getTarjeta(e.pago);const c=getCat(e.cat,'gasto');
+      const amountClass=e.esTC?'tc':'neg';
+      const prefix=e.esTC?'':'−';
+      htmlStr+=`<div class="feed-item" onclick="openModalGasto(${e.id})">
+        <div class="ico" style="background:${c.color}22">${c.icono}</div>
+        <div class="info"><div class="desc">${e.desc}</div><div class="meta"><span style="color:${t2.color}">${t2.icono} ${t2.nombre}</span></div></div>
+        <div class="amount ${amountClass}">${prefix}${fmt(e.monto,e.moneda)}</div>
+      </div>`;
+    }
+  });
+  lista.innerHTML=htmlStr;
+}
+
+// ── Suscripciones pendientes de confirmar ────────────
+function getSubsPendientes(){
+  const hoy=new Date();
+  const diaHoy=hoy.getDate();
+  const mes=hoy.getMonth()+1;
+  const anio=hoy.getFullYear();
+  return subs.filter(s=>{
+    const diff=Math.abs(s.dia-diaHoy);
+    if(diff>3)return false; // dentro del rango de ±3 días
+    const yaConfirmada=pagosSubs.find(p=>p.sub_id===s.id&&p.mes===mes&&p.anio===anio);
+    return !yaConfirmada;
+  });
+}
+
+async function confirmarPago(subId,pagado){
+  await dbConfirmarPagoSub(subId,pagado);
+  pagosSubs=await dbCargarPagosSubs();
+  renderAll();
+}
+
+function renderSubsPendientes(){
+  const pendientes=getSubsPendientes();
+  const wrap=document.getElementById('subs-pendientes-wrap');
+  const lista=document.getElementById('subs-pendientes-list');
+  if(!pendientes.length){wrap.style.display='none';return;}
+  wrap.style.display='block';
+  lista.innerHTML=pendientes.map(s=>{
+    const c=getCat(s.cat,'sub');
+    const hoy=new Date();
+    const diff=s.dia-hoy.getDate();
+    const txtDiff=diff===0?'hoy':diff>0?`el día ${s.dia}`:`el ${s.dia} (hace ${Math.abs(diff)} días)`;
+    return`<div class="sub-pendiente">
+      <div class="sp-row">
+        <div class="sp-ico" style="background:${c.color}22">${c.icono}</div>
+        <div class="sp-info">
+          <div class="sp-name">${s.nombre}</div>
+          <div class="sp-meta">Débito ${txtDiff}</div>
+        </div>
+        <div class="sp-amount">${fmt(s.monto,s.moneda)}</div>
+      </div>
+      <div class="sp-btns">
+        <button class="sp-btn-si" onclick="confirmarPago(${s.id},true)">✅ Ya lo pagué</button>
+        <button class="sp-btn-no" onclick="confirmarPago(${s.id},false)">⏳ Todavía no</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
 function renderSubs(){
   const hoy=new Date();
+  renderSubsPendientes();
   const arsTotal=subs.filter(s=>s.moneda!=='USD').reduce((a,s)=>a+s.monto,0);
   const usdTotal=subs.filter(s=>s.moneda==='USD').reduce((a,s)=>a+s.monto,0);
   document.getElementById('ss-mes').textContent=fmt(arsTotal)+(usdTotal>0?` + ${fmt(usdTotal,'USD')}`:'');
@@ -1375,49 +1596,4 @@ function urlBase64ToUint8Array(base64String) {
 async function initPushNotifications() {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
   try {
-    const reg = await navigator.serviceWorker.ready;
-    // Pedir permiso
-    const permission = await Notification.requestPermission();
-    if (permission !== 'granted') return;
-    // Suscribir al push
-    let sub = await reg.pushManager.getSubscription();
-    if (!sub) {
-      sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
-      });
-    }
-    // Guardar en Supabase
-    const subJson = sub.toJSON();
-    await sb.from('dispositivos').upsert(
-      { user_id: currentUser.id, subscription: subJson },
-      { onConflict: 'user_id' }
-    );
-    console.log('Push registrado OK');
-  } catch(e) {
-    console.log('Push error:', e);
-  }
-}
-
-// ── Init ─────────────────────────────────────────────
-(async()=>{
-  showLoading('Verificando sesión...');
-  const{data:{session}}=await sb.auth.getSession();
-  if(!session){window.location.href='login.html';return;}
-  currentUser=session.user;
-  showLoading('Cargando datos...');
-  [gastos,subs,ingresos,tarjetas,cats]=await Promise.all([
-    dbCargarGastos(),dbCargarSubs(),dbCargarIngresos(),dbCargarTarjetas(),dbCargarCats()
-  ]);
-  const configData = await dbCargarConfig();
-  cierres = configData.cierres;
-  notifConfig = configData.notifConfig;
-  hideLoading();
-  renderAll();
-  setTimeout(checkRecordatorioMes, 800);
-  setTimeout(initPushNotifications, 2000); // después de que carga todo // Pequeño delay para que cargue la UI primero
-})();
-</script>
-<script>if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}</script>
-</body>
-</html>
+    const reg = await navigator.serviceWorker.re
