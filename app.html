@@ -531,8 +531,14 @@ async function dbCargarConfig(){
   const{data}=await sb.from('config').select('cierres, notif_config').eq('user_id',currentUser.id).maybeSingle();
   return {cierres: data?.cierres||{}, notifConfig: data?.notif_config||{}};
 }
-async function dbGuardarConfig(c){await sb.from('config').upsert({user_id:currentUser.id,cierres:c,updated_at:new Date().toISOString()});}
-async function dbGuardarNotifConfig(nc){await sb.from('config').upsert({user_id:currentUser.id,notif_config:nc,updated_at:new Date().toISOString()});}
+async function dbGuardarConfig(c){
+  cierres=c; // actualizar estado local
+  await sb.from('config').upsert({user_id:currentUser.id,cierres:c,notif_config:notifConfig,updated_at:new Date().toISOString()});
+}
+async function dbGuardarNotifConfig(nc){
+  notifConfig=nc; // actualizar estado local
+  await sb.from('config').upsert({user_id:currentUser.id,cierres:cierres,notif_config:nc,updated_at:new Date().toISOString()});
+}
 async function dbCargarTarjetas(){
   const{data,error}=await sb.from('tarjetas').select('*').eq('user_id',currentUser.id).order('created_at',{ascending:true});
   if(error)return[];
