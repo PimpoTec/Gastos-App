@@ -1035,28 +1035,6 @@ function renderDashboard(){
     return`<div class="vencimiento-item ${al}"><div class="vencimiento-ico">${e.ico}</div><div style="flex:1"><div style="font-weight:600;font-size:14px">${e.nombre}</div><div style="font-size:12px;color:var(--muted);margin-top:2px">Cierra <strong style="color:${e.diff<=2?'var(--danger)':'var(--text)'}">${txt.toLowerCase()}</strong></div></div></div>`;
   }).join('')||'<div style="font-size:13px;color:var(--muted);padding:8px 0">Sin vencimientos de tarjeta próximos 🎉</div>';
 
-  // Gastos fijos del mes
-  const hoyD=hoy.getDate(),hoyM=hoy.getMonth(),hoyY=hoy.getFullYear();
-  const fijosDelMes=gastos.filter(g=>{
-    if(!g.esFijo)return false;
-    const d=new Date(g.fecha+'T00:00:00');
-    return d.getMonth()===hoyM&&d.getFullYear()===hoyY;
-  });
-  const listaFijos=document.getElementById('gastos-fijos-list');
-  if(!fijosDelMes.length){
-    listaFijos.innerHTML='<div style="font-size:13px;color:var(--muted);padding:4px 0 12px">Sin gastos fijos este mes. Marcá un gasto como fijo al cargarlo.</div>';
-  }else{
-    listaFijos.innerHTML=fijosDelMes.map(g=>{
-      const t=getTarjeta(g.pago);const c=getCat(g.cat,'gasto');
-      return`<div class="gasto-item" onclick="openModalGasto(${g.id})">
-        <div class="ico" style="background:${c.color}22">${c.icono}</div>
-        <div class="info"><div class="desc">${g.desc} <span class="badge b-fijo">Fijo</span></div>
-        <div class="meta"><span style="color:${t.color}">${t.icono} ${t.nombre}</span></div></div>
-        <div class="right"><div class="amount">${fmt(g.monto,g.moneda)}</div></div>
-      </div>`;
-    }).join('');
-  }
-
   // Breakdown tarjetas
   const c=document.getElementById('pago-breakdown');
   const tCred=tarjetas.filter(t=>t.esTarjeta);
@@ -1092,26 +1070,6 @@ function renderDashboard(){
       ${barHtml}
       <div class="cierre-info"><span style="${alertC}">${txtC}</span><span>${fmt(total)} gastado</span></div>
     </div>`;
-  }).join('');
-}
-
-function renderGastos(){
-  const query=document.getElementById('buscador-gastos').value.toLowerCase();
-  const lista=document.getElementById('g-lista');
-  const fil=gastos.filter(g=>{
-    if(!query)return true;
-    const t=getTarjeta(g.pago);const c=getCat(g.cat,'gasto');
-    return g.desc.toLowerCase().includes(query)||t.nombre.toLowerCase().includes(query)||c.nombre.toLowerCase().includes(query);
-  });
-  if(!fil.length){lista.innerHTML=`<div class="empty"><div class="ico">🧾</div><p>Sin movimientos.</p></div>`;return;}
-  lista.innerHTML=fil.map(g=>{
-    const t=getTarjeta(g.pago);const c=getCat(g.cat,'gasto');
-    const fl=new Date(g.fecha+'T00:00:00').toLocaleDateString('es-AR',{day:'numeric',month:'short'});
-    let txtC='';
-    if(g.cuotas){const dc=cierres[g.pago]?.dia;const n=dc?calcularCuotaActual(g.fecha,dc):1;const col=n>g.cuotas?'var(--muted)':'var(--accent)';txtC=`<span style="color:${col};font-weight:600">C${Math.min(n,g.cuotas)}/${g.cuotas}</span>`;}
-    const usdTag=g.moneda==='USD'?`<span class="usd-tag">USD</span>`:'';
-    const fijoTag=g.esFijo?`<span class="badge b-fijo">Fijo</span>`:'';
-    return`<div class="gasto-item" onclick="openModalGasto(${g.id})"><div class="ico" style="background:${c.color}22">${c.icono}</div><div class="info"><div class="desc">${g.desc}</div><div class="meta"><span style="color:${t.color}">${t.icono} ${t.nombre}</span><span>${fl}</span>${txtC}${usdTag}${fijoTag}</div></div><div class="right"><div class="amount">${fmt(g.monto,g.moneda)}</div></div></div>`;
   }).join('');
 }
 
@@ -1596,4 +1554,49 @@ function urlBase64ToUint8Array(base64String) {
 async function initPushNotifications() {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
   try {
-    const reg = await navigator.serviceWorker.re
+    const reg = await navigator.serviceWorker.ready;
+    // Pedir permiso
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') return;
+    // Suscribir al push
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+      });
+    }
+    // Guardar en Supabase
+    const subJson = sub.toJSON();
+    await sb.from('dispositivos').upsert(
+      { user_id: currentUser.id, subscription: subJson },
+      { onConflict: 'user_id' }
+    );
+    console.log('Push registrado OK');
+  } catch(e) {
+    console.log('Push error:', e);
+  }
+}
+
+// ── Init ─────────────────────────────────────────────
+(async()=>{
+  showLoading('Verificando sesión...');
+  const{data:{session}}=await sb.auth.getSession();
+  if(!session){window.location.href='login.html';return;}
+  currentUser=session.user;
+  showLoading('Cargando datos...');
+  [gastos,subs,ingresos,tarjetas,cats,pagosSubs]=await Promise.all([
+    dbCargarGastos(),dbCargarSubs(),dbCargarIngresos(),dbCargarTarjetas(),dbCargarCats(),dbCargarPagosSubs()
+  ]);
+  const configData = await dbCargarConfig();
+  cierres = configData.cierres;
+  notifConfig = configData.notifConfig;
+  hideLoading();
+  renderAll();
+  setTimeout(checkRecordatorioMes, 800);
+  setTimeout(initPushNotifications, 2000); // después de que carga todo // Pequeño delay para que cargue la UI primero
+})();
+</script>
+<script>if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}</script>
+</body>
+</html>
