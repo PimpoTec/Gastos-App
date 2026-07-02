@@ -1330,7 +1330,8 @@ function renderDashboard(){
     let detalleTexto='';
     if(usd>0) detalleTexto+=`${fmt(ars)} ARS + ${fmt(usd,'USD')}${dolarBlue>0?` (≈${fmt(usdEnArs)})`:''}`;
     else detalleTexto+=`${fmt(ars)} gastado`;
-    if(interes>0) detalleTexto+=` + ${fmt(interes)} interés (1.21%)`;
+    if(interes>0) detalleTexto+=` + ${fmt(interes)} interés`;
+    detalleTexto+=` = <strong style="color:var(--text)">${fmt(totalConInteres)}</strong>`;
     return`<div class="pago-row" style="--row-accent:${t.color}">
       <div class="row-top">
         <div class="ico" style="background:${t.color}22">${t.icono}</div>
