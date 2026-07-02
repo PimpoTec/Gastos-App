@@ -1,4 +1,4 @@
-const CACHE = 'gastos-v4';
+const CACHE = 'gastos-v5';
 const ASSETS = ['/login.html', '/app.html', '/manifest.json'];
 
 self.addEventListener('install', e => {
@@ -13,9 +13,15 @@ self.addEventListener('activate', e => {
   self.clients.claim();
 });
 
-// Network-first
+// Network-first — excluir Supabase para que siempre vaya directo a la red
 self.addEventListener('fetch', e => {
   if (!e.request.url.startsWith('http')) return;
+  // Supabase y CDN externas: dejar pasar sin interceptar
+  if (e.request.url.includes('supabase.co') ||
+      e.request.url.includes('cdn.jsdelivr') ||
+      e.request.url.includes('googleapis.com') ||
+      e.request.url.includes('gstatic.com')) return;
+
   e.respondWith(
     fetch(e.request)
       .then(response => {
