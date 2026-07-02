@@ -305,32 +305,33 @@
     <!-- Header cuotas -->
     <div id="header-hero-cuotas" style="display:none">
       <div style="margin-bottom:6px">
-        <!-- Selector de tarjeta -->
         <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none" id="cuotas-tarjeta-tabs"></div>
       </div>
-      <div class="hero-card" style="padding:14px 16px">
-        <div class="hero-row" style="margin-top:0">
+      <div class="hero-card" style="padding:18px 18px 16px">
+        <div class="hero-lbl">Resumen de cuotas</div>
+        <div class="hero-row" style="margin-top:12px">
           <div class="hero-mini">
-            <div class="lbl">Cuotas este mes</div>
+            <div class="lbl">Este mes</div>
             <div class="val" id="cu-mes-hero">$0</div>
           </div>
           <div class="hero-mini">
             <div class="lbl">Próximo cobro</div>
-            <div class="val" id="cu-prox-hero" style="font-size:13px;margin-top:2px">—</div>
+            <div class="val" id="cu-prox-hero" style="font-size:13px;margin-top:2px;line-height:1.4">—</div>
           </div>
         </div>
       </div>
     </div>
     <!-- Header subs -->
     <div id="header-hero-subs" style="display:none">
-      <div class="hero-card" style="padding:14px 16px">
-        <div class="hero-row" style="margin-top:0">
+      <div class="hero-card" style="padding:18px 18px 16px">
+        <div class="hero-lbl">Total suscripciones del mes</div>
+        <div class="hero-row" style="margin-top:12px">
           <div class="hero-mini">
-            <div class="lbl">Total mensual ARS</div>
+            <div class="lbl">En pesos</div>
             <div class="val" id="ss-mes-hero">$0</div>
           </div>
           <div class="hero-mini">
-            <div class="lbl">Total mensual USD</div>
+            <div class="lbl">En dólares</div>
             <div class="val" id="ss-usd-hero">U$0</div>
           </div>
         </div>
@@ -1757,8 +1758,10 @@ function renderBalance(){
   mesI.forEach(i=>{porCat[i.cat]=(porCat[i.cat]||0)+i.monto;});
   const maxCat=Math.max(...Object.values(porCat),1);
   document.getElementById('balance-cats').innerHTML=Object.entries(porCat).sort((a,b)=>b[1]-a[1]).map(([catId,total])=>{
-    const c=getCatIngreso(catId);const pct=Math.round((total/maxCat)*100);
-    return`<div class="cat-ingreso-row"><div style="font-size:20px;margin-right:4px">${c.icono}</div><div style="flex:1"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:14px;font-weight:500">${c.nombre}</span><span style="font-size:14px;font-weight:700;color:var(--success)">${fmt(total)}</span></div><div class="bar-wrap"><div class="bar" style="width:${pct}%;background:${c.color}"></div></div></div></div>`;
+    const c=getCatIngreso(catId);
+    const pctTotal=totalIngresos>0?Math.round((total/totalIngresos)*100):0;
+    const pctBarra=Math.max(pctTotal,8); // mínimo 8% para que siempre se vea
+    return`<div class="cat-ingreso-row"><div style="font-size:20px;margin-right:4px">${c.icono}</div><div style="flex:1"><div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="font-size:14px;font-weight:600">${c.nombre}</span><div style="text-align:right"><span style="font-size:14px;font-weight:700;color:var(--success)">${fmt(total)}</span><span style="font-size:11px;color:var(--muted);margin-left:6px">${pctTotal}%</span></div></div><div class="bar-wrap"><div class="bar" style="width:${pctBarra}%;background:${c.color}"></div></div></div></div>`;
   }).join('')||'<div style="font-size:13px;color:var(--muted);padding:8px 0">Sin ingresos este mes</div>';
   const lista=document.getElementById('i-lista');
   const iMes=[...ingresos].filter(i=>{const d=new Date(i.fecha+'T00:00:00');return d.getMonth()===mesRef.getMonth()&&d.getFullYear()===mesRef.getFullYear();}).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
