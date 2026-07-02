@@ -34,7 +34,7 @@
     .app{display:flex;flex-direction:column;height:100dvh;height:-webkit-fill-available}
 
     /* ── Header ── */
-    .header{padding:14px 20px 14px;padding-top:calc(env(safe-area-inset-top,0px) + 14px);background:var(--bg);flex-shrink:0;border-bottom:1px solid var(--border)}
+    .header{padding:10px 16px 10px;padding-top:calc(env(safe-area-inset-top,0px) + 10px);background:var(--bg);flex-shrink:0;border-bottom:1px solid var(--border)}
     .header-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
     .header h1{font-size:20px;font-weight:800;letter-spacing:-0.5px;color:var(--text)}
     .header h1 span{color:var(--accent)}
@@ -291,18 +291,16 @@
     </div>
     <!-- Hero solo en gastos -->
     <div id="header-hero-gastos">
-      <div class="hero-card">
-        <div class="hero-lbl">Salida de bolsillo del mes</div>
-        <div class="hero-val" id="hero-total">$0</div>
-        <div class="hero-sub" id="hero-sub">Cargando...</div>
-        <div class="hero-row">
-          <div class="hero-mini"><div class="lbl">Tarjetas</div><div class="val" id="hero-tarjetas">$0</div></div>
-          <div class="hero-mini"><div class="lbl">Suscripciones</div><div class="val" id="hero-subs">$0</div></div>
+      <div class="hero-card" style="padding:14px 16px 12px">
+        <div class="hero-lbl" style="margin-bottom:4px">Salida de bolsillo del mes</div>
+        <div class="hero-val" style="font-size:28px" id="hero-total">$0</div>
+        <div class="hero-sub" id="hero-sub" style="margin-top:2px;margin-bottom:0">Cargando...</div>
+        <div class="hero-row" style="margin-top:10px;gap:6px">
+          <div class="hero-mini" style="padding:8px 10px"><div class="lbl">Tarjetas</div><div class="val" style="font-size:14px" id="hero-tarjetas">$0</div></div>
+          <div class="hero-mini" style="padding:8px 10px"><div class="lbl">Suscripciones</div><div class="val" style="font-size:14px" id="hero-subs">$0</div></div>
+          <div class="hero-mini" style="padding:8px 10px"><div class="lbl">En USD</div><div class="val" style="font-size:14px" id="hero-usd">U$0</div></div>
         </div>
-        <div class="hero-row" style="margin-top:8px">
-          <div class="hero-mini" style="flex:none;width:100%"><div class="lbl">En USD</div><div class="val" id="hero-usd" style="font-size:18px">U$0</div></div>
-        </div>
-        <div id="hero-semaforo" style="display:none;margin-top:10px;padding:7px 14px;border-radius:99px;font-size:12px;font-weight:700;display:inline-block;border:1px solid transparent;position:relative;z-index:1"></div>
+        <div id="hero-semaforo" style="display:none;margin-top:8px;padding:5px 12px;border-radius:99px;font-size:11px;font-weight:700;display:inline-block;border:1px solid transparent;position:relative;z-index:1"></div>
       </div>
     </div>
     <!-- Header cuotas -->
