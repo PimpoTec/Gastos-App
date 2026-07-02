@@ -1248,7 +1248,7 @@ function getGastosPeriodoActual(tId,gList){
   return gList.filter(g=>{
     if(g.pago!=tId||g.moneda==='USD')return false;
     if(g.cuotas){const n=calcularCuotaActual(g.fecha,cfg.dia);return n>=1&&n<=g.cuotas;}
-    const fd=new Date(g.fecha+'T00:00:00');return fd>=desde&&fd<hasta;
+    const fd=new Date(g.fecha+'T00:00:00');return fd>=desde&&fd<=hasta;
   }).reduce((a,g)=>a+g.monto,0);
 }
 
