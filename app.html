@@ -1338,7 +1338,10 @@ function renderDashboard(){
           <div class="name">${t.nombre}</div>
           <div class="detail"><span class="periodo-badge">${strDesde} → ${strHasta}</span></div>
         </div>
-        <div class="monto-grande" style="color:${t.color}">${totalTexto}</div>
+        <div class="monto-grande" style="color:${t.color};text-align:right">
+          <div>${fmt(ars)}</div>
+          ${usd>0?`<div style="font-size:14px;font-weight:600;opacity:0.8;margin-top:2px">${fmt(usd,'USD')}</div>`:''}
+        </div>
       </div>
       ${barHtml}
       <div class="cierre-info"><span style="${alertC}">${txtC}</span><span style="text-align:right;font-size:11px;color:var(--muted)">${detalleTexto}</span></div>
