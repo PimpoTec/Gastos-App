@@ -302,6 +302,7 @@
         <div class="hero-row" style="margin-top:8px">
           <div class="hero-mini" style="flex:none;width:100%"><div class="lbl">En USD</div><div class="val" id="hero-usd" style="font-size:18px">U$0</div></div>
         </div>
+        <div id="hero-semaforo" style="display:none;margin-top:10px;padding:7px 14px;border-radius:99px;font-size:12px;font-weight:700;display:inline-block;border:1px solid transparent;position:relative;z-index:1"></div>
       </div>
     </div>
     <!-- Header cuotas -->
@@ -1245,30 +1246,21 @@ function updateHero(){
       :fmt(totalUSD,'USD');
   }
 
-  // Semáforo de presupuesto — solo una píldora, NO cambia el fondo
-  const heroCard=document.querySelector('#header-hero-gastos .hero-card');
-  if(heroCard){
-    // Siempre forzar el azul original
-    heroCard.style.background='linear-gradient(145deg,#003d6b 0%,#0062a3 50%,#0077c2 100%)';
-  }
-  if(heroCard&&presupuestoMensual>0){
-    const sem=getSemaforoColor(totalARS,presupuestoMensual);
-    if(sem){
-      let semEl=document.getElementById('hero-semaforo');
-      if(!semEl){
-        semEl=document.createElement('div');
-        semEl.id='hero-semaforo';
-        semEl.style.cssText='margin-top:12px;padding:7px 12px;border-radius:99px;font-size:12px;font-weight:700;display:inline-block;position:relative;z-index:1;border:1px solid;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
-        heroCard.appendChild(semEl);
+  // Semáforo de presupuesto
+  const semEl=document.getElementById('hero-semaforo');
+  if(semEl){
+    if(presupuestoMensual>0){
+      const sem=getSemaforoColor(totalARS,presupuestoMensual);
+      if(sem){
+        semEl.style.display='inline-block';
+        semEl.style.background=sem.bg+'55';
+        semEl.style.color=sem.color;
+        semEl.style.borderColor=sem.color+'55';
+        semEl.textContent=sem.label;
       }
-      semEl.style.background=sem.bg+'55';
-      semEl.style.color=sem.color;
-      semEl.style.borderColor=sem.color+'55';
-      semEl.textContent=sem.label;
+    } else {
+      semEl.style.display='none';
     }
-  } else {
-    const semEl=document.getElementById('hero-semaforo');
-    if(semEl) semEl.remove();
   }
 }
 
