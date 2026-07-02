@@ -1707,4 +1707,4 @@ function renderBalance(){
   const maxCat=Math.max(...Object.values(porCat),1);
   document.getElementById('balance-cats').innerHTML=Object.entries(porCat).sort((a,b)=>b[1]-a[1]).map(([catId,total])=>{
     const c=getCatIngreso(catId);const pct=Math.round((total/maxCat)*100);
-    return`<div 
+    return`<div cla
