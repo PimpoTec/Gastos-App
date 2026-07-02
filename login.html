@@ -3,36 +3,36 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="theme-color" content="#0a0e14">
+  <meta name="theme-color" content="#050810">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <title>Gastos — Acceso</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
-    :root{--bg:#0a0e14;--surface:#11161f;--card:#161c28;--border:rgba(255,255,255,0.06);--border-2:rgba(255,255,255,0.1);--text:#f4f6f9;--muted:rgba(244,246,249,0.42);--accent:#2dd4bf;--accent-2:#0ea5e9;--danger:#fb5d5d;--radius:16px;--radius-sm:12px}
+    :root{--bg:#050810;--surface:#0c1118;--card:#111820;--border:rgba(255,255,255,0.06);--border-2:rgba(255,255,255,0.1);--text:#eef2f7;--muted:rgba(238,242,247,0.4);--accent:#009ee3;--accent-dim:rgba(0,158,227,0.12);--danger:#f23d4f;--success:#00c48c;--radius:18px;--radius-sm:13px}
     *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
     html,body{height:100%;background:var(--bg);font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:var(--text);-webkit-font-smoothing:antialiased}
-    .wrap{min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}
-    .logo{width:64px;height:64px;border-radius:18px;background:linear-gradient(135deg,#2dd4bf,#0ea5e9);display:flex;align-items:center;justify-content:center;font-size:30px;margin-bottom:14px;box-shadow:0 8px 24px rgba(45,212,191,0.3)}
-    .title{font-size:27px;font-weight:800;letter-spacing:-0.6px;margin-bottom:4px}
+    .wrap{min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;background:radial-gradient(ellipse at 50% 0%,#001a36 0%,#050810 60%)}
+    .logo{width:72px;height:72px;border-radius:22px;background:linear-gradient(145deg,#0062a3,#009ee3);display:flex;align-items:center;justify-content:center;font-size:32px;margin-bottom:16px;box-shadow:0 8px 32px rgba(0,158,227,0.3)}
+    .title{font-size:28px;font-weight:800;letter-spacing:-0.8px;margin-bottom:4px}
     .title span{color:var(--accent)}
     .subtitle{font-size:14px;color:var(--muted);margin-bottom:36px;font-weight:500}
-    .card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:24px;width:100%;max-width:380px;box-shadow:0 12px 40px rgba(0,0,0,0.3)}
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,0.5)}
     .tabs{display:flex;gap:4px;margin-bottom:24px;background:var(--card);border-radius:var(--radius-sm);padding:4px}
-    .tab{flex:1;padding:9px;font-size:14px;font-weight:700;border:none;background:none;color:var(--muted);border-radius:10px;cursor:pointer;transition:all .15s}
-    .tab.active{background:linear-gradient(135deg,#2dd4bf,#0ea5e9);color:#06141a}
+    .tab{flex:1;padding:10px;font-size:14px;font-weight:700;border:none;background:none;color:var(--muted);border-radius:11px;cursor:pointer;transition:all .15s;font-family:inherit}
+    .tab.active{background:var(--accent);color:white}
     .field{margin-bottom:14px}
-    .field label{display:block;font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:7px;font-weight:700}
-    input{width:100%;background:var(--card);border:1.5px solid var(--border-2);border-radius:var(--radius-sm);padding:13px 14px;color:var(--text);font-size:15px;outline:none;transition:all .15s;font-family:inherit;font-weight:500}
-    input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(45,212,191,0.14)}
-    .btn{width:100%;padding:15px;background:linear-gradient(135deg,#2dd4bf,#0ea5e9);color:#06141a;border:none;border-radius:var(--radius);font-size:16px;font-weight:700;cursor:pointer;margin-top:4px;transition:opacity .15s;box-shadow:0 4px 16px rgba(45,212,191,0.25)}
+    .field label{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:7px;font-weight:700}
+    input{width:100%;background:var(--card);border:1.5px solid var(--border-2);border-radius:var(--radius-sm);padding:14px;color:var(--text);font-size:15px;outline:none;transition:border-color .15s;font-family:inherit;font-weight:500}
+    input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim)}
+    .btn{width:100%;padding:16px;background:var(--accent);color:white;border:none;border-radius:var(--radius-sm);font-size:16px;font-weight:700;cursor:pointer;margin-top:4px;transition:opacity .15s;font-family:inherit;letter-spacing:-.1px}
     .btn:active{opacity:.85}
     .btn:disabled{opacity:.5;cursor:not-allowed}
-    .msg{font-size:13px;text-align:center;margin-top:14px;min-height:20px;padding:8px;border-radius:8px;font-weight:500}
-    .msg.error{background:rgba(251,93,93,0.1);color:var(--danger)}
-    .msg.ok{background:rgba(52,211,153,0.1);color:#34d399}
-    .hint{font-size:12px;color:var(--muted);text-align:center;line-height:1.5;margin-top:20px;font-weight:500}
+    .msg{font-size:13px;text-align:center;margin-top:14px;min-height:20px;padding:10px;border-radius:10px;font-weight:500}
+    .msg.error{background:rgba(242,61,79,0.1);color:var(--danger);border:1px solid rgba(242,61,79,0.15)}
+    .msg.ok{background:rgba(0,196,140,0.1);color:var(--success);border:1px solid rgba(0,196,140,0.15)}
+    .hint{font-size:12px;color:var(--muted);text-align:center;line-height:1.6;margin-top:20px;font-weight:500}
   </style>
 </head>
 <body>
