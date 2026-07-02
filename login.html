@@ -3,35 +3,35 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="theme-color" content="#050810">
+  <meta name="theme-color" content="#0a0e14">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <title>Gastos — Acceso</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
-    :root{--bg:#050810;--surface:#0c1118;--card:#111820;--border:rgba(255,255,255,0.06);--border-2:rgba(255,255,255,0.1);--text:#eef2f7;--muted:rgba(238,242,247,0.4);--accent:#009ee3;--accent-dim:rgba(0,158,227,0.12);--danger:#f23d4f;--success:#00c48c;--radius:18px;--radius-sm:13px}
+    :root{--bg:#0a0e14;--surface:#11161f;--card:#161c28;--border:rgba(255,255,255,0.06);--border-2:rgba(255,255,255,0.1);--text:#f4f6f9;--muted:rgba(244,246,249,0.42);--accent:#2dd4bf;--accent-2:#0ea5e9;--danger:#fb5d5d;--success:#34d399;--radius:16px;--radius-sm:12px}
     *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
     html,body{height:100%;background:var(--bg);font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:var(--text);-webkit-font-smoothing:antialiased}
-    .wrap{min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;background:radial-gradient(ellipse at 50% 0%,#001a36 0%,#050810 60%)}
-    .logo{width:72px;height:72px;border-radius:22px;background:linear-gradient(145deg,#0062a3,#009ee3);display:flex;align-items:center;justify-content:center;font-size:32px;margin-bottom:16px;box-shadow:0 8px 32px rgba(0,158,227,0.3)}
+    .wrap{min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}
+    .logo{width:72px;height:72px;border-radius:22px;background:linear-gradient(145deg,#0f766e,#2dd4bf);display:flex;align-items:center;justify-content:center;font-size:32px;margin-bottom:16px;box-shadow:0 8px 32px rgba(45,212,191,0.3)}
     .title{font-size:28px;font-weight:800;letter-spacing:-0.8px;margin-bottom:4px}
     .title span{color:var(--accent)}
     .subtitle{font-size:14px;color:var(--muted);margin-bottom:36px;font-weight:500}
-    .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,0.5)}
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,0.4)}
     .tabs{display:flex;gap:4px;margin-bottom:24px;background:var(--card);border-radius:var(--radius-sm);padding:4px}
     .tab{flex:1;padding:10px;font-size:14px;font-weight:700;border:none;background:none;color:var(--muted);border-radius:11px;cursor:pointer;transition:all .15s;font-family:inherit}
-    .tab.active{background:var(--accent);color:white}
+    .tab.active{background:linear-gradient(135deg,#2dd4bf,#0ea5e9);color:#06141a}
     .field{margin-bottom:14px}
     .field label{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:7px;font-weight:700}
     input{width:100%;background:var(--card);border:1.5px solid var(--border-2);border-radius:var(--radius-sm);padding:14px;color:var(--text);font-size:15px;outline:none;transition:border-color .15s;font-family:inherit;font-weight:500}
-    input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim)}
-    .btn{width:100%;padding:16px;background:var(--accent);color:white;border:none;border-radius:var(--radius-sm);font-size:16px;font-weight:700;cursor:pointer;margin-top:4px;transition:opacity .15s;font-family:inherit;letter-spacing:-.1px}
+    input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(45,212,191,0.12)}
+    .btn{width:100%;padding:16px;background:linear-gradient(135deg,#2dd4bf,#0ea5e9);color:#06141a;border:none;border-radius:var(--radius-sm);font-size:16px;font-weight:700;cursor:pointer;margin-top:4px;transition:opacity .15s;font-family:inherit}
     .btn:active{opacity:.85}
     .btn:disabled{opacity:.5;cursor:not-allowed}
     .msg{font-size:13px;text-align:center;margin-top:14px;min-height:20px;padding:10px;border-radius:10px;font-weight:500}
-    .msg.error{background:rgba(242,61,79,0.1);color:var(--danger);border:1px solid rgba(242,61,79,0.15)}
-    .msg.ok{background:rgba(0,196,140,0.1);color:var(--success);border:1px solid rgba(0,196,140,0.15)}
+    .msg.error{background:rgba(251,93,93,0.1);color:var(--danger);border:1px solid rgba(251,93,93,0.15)}
+    .msg.ok{background:rgba(52,211,153,0.1);color:var(--success);border:1px solid rgba(52,211,153,0.15)}
     .hint{font-size:12px;color:var(--muted);text-align:center;line-height:1.6;margin-top:20px;font-weight:500}
   </style>
 </head>
@@ -62,35 +62,28 @@
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-  // ⚠️ REEMPLAZÁ CON TUS VALORES DE SUPABASE
-  const SUPABASE_URL = 'https://rujgpkiuhofndbmcntuj.supabase.co';
-  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ1amdwa2l1aG9mbmRibWNudHVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2NjUxMDksImV4cCI6MjA5ODI0MTEwOX0.XppKMyyg53h32L5iBeo6B3LwAe_1VW1_9eas8ysuwYc';
-  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-  sb.auth.getSession().then(({data:{session}}) => {
-    if(session) window.location.href = 'app.html';
-  });
-
-  function setTab(t) {
-    document.getElementById('panel-login').style.display    = t==='login'    ? '' : 'none';
-    document.getElementById('panel-register').style.display = t==='register' ? '' : 'none';
-    document.querySelectorAll('.tab').forEach((b,i) => b.classList.toggle('active',(i===0&&t==='login')||(i===1&&t==='register')));
+  const SUPABASE_URL='https://rujgpkiuhofndbmcntuj.supabase.co';
+  const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ1amdwa2l1aG9mbmRibWNudHVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2NjUxMDksImV4cCI6MjA5ODI0MTEwOX0.XppKMyyg53h32L5iBeo6B3LwAe_1VW1_9eas8ysuwYc';
+  const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+  sb.auth.getSession().then(({data:{session}})=>{if(session)window.location.href='app.html';});
+  function setTab(t){
+    document.getElementById('panel-login').style.display=t==='login'?'':'none';
+    document.getElementById('panel-register').style.display=t==='register'?'':'none';
+    document.querySelectorAll('.tab').forEach((b,i)=>b.classList.toggle('active',(i===0&&t==='login')||(i===1&&t==='register')));
     setMsg('');
   }
   function setMsg(txt,type='error'){const el=document.getElementById('msg');el.textContent=txt;el.className='msg'+(txt?' '+type:'');}
   function setLoading(id,on){const b=document.getElementById(id);b.disabled=on;b.textContent=on?'Cargando...':(id==='btn-login'?'Ingresar':'Crear cuenta');}
-
-  async function login() {
+  async function login(){
     const email=document.getElementById('l-email').value.trim();
     const pass=document.getElementById('l-pass').value;
     if(!email||!pass){setMsg('Completá todos los campos');return;}
     setLoading('btn-login',true);
-    const {error}=await sb.auth.signInWithPassword({email,password:pass});
+    const{error}=await sb.auth.signInWithPassword({email,password:pass});
     if(error){setMsg(trad(error.message));setLoading('btn-login',false);return;}
     window.location.href='app.html';
   }
-
-  async function register() {
+  async function register(){
     const email=document.getElementById('r-email').value.trim();
     const pass=document.getElementById('r-pass').value;
     const pass2=document.getElementById('r-pass2').value;
@@ -98,23 +91,21 @@
     if(pass!==pass2){setMsg('Las contraseñas no coinciden');return;}
     if(pass.length<6){setMsg('La contraseña debe tener al menos 6 caracteres');return;}
     setLoading('btn-register',true);
-    const {error}=await sb.auth.signUp({email,password:pass});
+    const{error}=await sb.auth.signUp({email,password:pass});
     if(error){setMsg(trad(error.message));setLoading('btn-register',false);return;}
     setMsg('✅ Cuenta creada. Ya podés ingresar.','ok');
     setLoading('btn-register',false);
     setTimeout(()=>setTab('login'),2000);
   }
-
   function trad(m){
-    if(m.includes('Invalid login')) return 'Email o contraseña incorrectos';
-    if(m.includes('already registered')) return 'Este email ya tiene una cuenta';
-    if(m.includes('valid email')) return 'El email no es válido';
-    return 'Error: '+m;
+    if(m.includes('Invalid login'))return'Email o contraseña incorrectos';
+    if(m.includes('already registered'))return'Este email ya tiene una cuenta';
+    if(m.includes('valid email'))return'El email no es válido';
+    return'Error: '+m;
   }
-
   document.addEventListener('keydown',e=>{
     if(e.key!=='Enter')return;
-    if(document.getElementById('panel-login').style.display!=='none') login(); else register();
+    if(document.getElementById('panel-login').style.display!=='none')login();else register();
   });
 </script>
 </body>
