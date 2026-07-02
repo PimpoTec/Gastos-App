@@ -1194,8 +1194,7 @@ function updateHero(){
   const subsConfirmadas=subs.filter(s=>{
     if(s.moneda==='USD')return false;
     const pago=pagosSubs.find(p=>p.sub_id===s.id&&p.mes===mesNum&&p.anio===anioNum);
-    if(pago)return pago.pagado; // confirmada: solo si pagado=true
-    return hoy.getDate()>=s.dia; // sin confirmar: asume pagada si el día ya pasó
+    return pago?.pagado===true; // solo cuenta si el usuario confirmó "Ya lo pagué"
   });
   const totalSubs=subsConfirmadas.reduce((a,s)=>a+s.monto,0);
   const totalARS=mesG.reduce((a,g)=>a+g.monto,0)+totalSubs;
@@ -1213,7 +1212,12 @@ function updateHero(){
   document.getElementById('hero-sub').textContent=new Date().toLocaleDateString('es-AR',{month:'long',year:'numeric'});
   document.getElementById('hero-tarjetas').textContent=fmt(totalTarjetas);
   document.getElementById('hero-subs').textContent=fmt(totalSubs);
-  document.getElementById('hero-usd').textContent=fmt(totalUSD,'USD');
+  const heroUsdEl=document.getElementById('hero-usd');
+  if(heroUsdEl){
+    heroUsdEl.innerHTML=dolarBlue>0&&totalUSD>0
+      ?`${fmt(totalUSD,'USD')}<br><span style="font-size:10px;opacity:.7">≈ ${fmt(totalUSD*dolarBlue)}</span>`
+      :fmt(totalUSD,'USD');
+  }
 
   // Semáforo de presupuesto
   const heroCard=document.querySelector('#header-hero-gastos .hero-card');
@@ -1493,6 +1497,12 @@ async function actualizarDolarManual(){
 
 // ── Funciones existentes que necesitan el mesOffset ─
 
+function fmtUSDConv(monto){
+  // Muestra el monto en USD y su equivalente en ARS si hay dólar blue cargado
+  if(dolarBlue>0) return `${fmt(monto,'USD')} <span style="font-size:10px;color:var(--muted);font-weight:500">≈ ${fmt(monto*dolarBlue)}</span>`;
+  return fmt(monto,'USD');
+}
+
 function renderFeed(){
   const query=(document.getElementById('buscador-gastos')?.value||'').toLowerCase();
   const lista=document.getElementById('feed-lista');
@@ -1568,10 +1578,13 @@ function renderFeed(){
       const t2=getTarjeta(e.pago);const c=getCat(e.cat,'gasto');
       const amountClass=e.esTC?'tc':'neg';
       const prefix=e.esTC?'':'−';
+      const montoHtml=e.moneda==='USD'
+        ?`<div style="text-align:right"><div class="amount pos">${fmt(e.monto,'USD')}</div>${dolarBlue>0?`<div style="font-size:10px;color:var(--muted);font-weight:500">≈ ${fmt(e.monto*dolarBlue)}</div>`:''}</div>`
+        :`<div class="amount ${amountClass}">${prefix}${fmt(e.monto)}</div>`;
       htmlStr+=`<div class="feed-item" onclick="openModalGasto(${e.id})">
         <div class="ico" style="background:${c.color}22">${c.icono}</div>
         <div class="info"><div class="desc">${e.desc}</div><div class="meta"><span style="color:${t2.color}">${t2.icono} ${t2.nombre}</span></div></div>
-        <div class="amount ${amountClass}">${prefix}${fmt(e.monto,e.moneda)}</div>
+        ${montoHtml}
       </div>`;
     }
   });
@@ -1658,7 +1671,10 @@ function renderSubs(){
     const diff=s.dia>=hoyDia?s.dia-hoyDia:30-hoyDia+s.dia;
     const prox=diff>=0&&diff<=5;
     const usdTag=s.moneda==='USD'?`<span class="usd-tag">USD</span>`:'';
-    return`<div class="gasto-item" style="${prox?'border:1.5px solid rgba(255,212,59,0.4)':''}" onclick="openModalSub(${s.id})"><div class="ico" style="background:${c.color}22">${c.icono}</div><div class="info"><div class="desc">${s.nombre}</div><div class="meta"><span style="color:${t.color}">${t.icono} ${t.nombre}</span> · día ${s.dia} ${usdTag}</div></div><div class="right"><div class="amount">${fmt(s.monto,s.moneda)}</div><div style="font-size:11px;color:var(--muted);margin-top:2px">/mes</div></div></div>`;
+    const montoHtml=s.moneda==='USD'&&dolarBlue>0
+      ?`<div class="amount">${fmt(s.monto,'USD')}</div><div style="font-size:10px;color:var(--muted);margin-top:2px">≈ ${fmt(s.monto*dolarBlue)}/mes</div>`
+      :`<div class="amount">${fmt(s.monto,s.moneda)}</div><div style="font-size:11px;color:var(--muted);margin-top:2px">/mes</div>`;
+    return`<div class="gasto-item" style="${prox?'border:1.5px solid rgba(255,212,59,0.4)':''}" onclick="openModalSub(${s.id})"><div class="ico" style="background:${c.color}22">${c.icono}</div><div class="info"><div class="desc">${s.nombre}</div><div class="meta"><span style="color:${t.color}">${t.icono} ${t.nombre}</span> · día ${s.dia} ${usdTag}</div></div><div class="right">${montoHtml}</div></div>`;
   }).join('');
 }
 
