@@ -1231,7 +1231,10 @@ function updateHero(){
 
   // Tarjetas: total del período actual de cada TC
   let totalTarjetas=0;
-  tarjetas.filter(t=>t.esTarjeta&&cierres[t.id]).forEach(t=>{totalTarjetas+=getGastosPeriodoActual(t.id,gastos);});
+  tarjetas.filter(t=>t.esTarjeta&&cierres[t.id]).forEach(t=>{
+    const {ars,usd}=getGastosPeriodoActual(t.id,gastos);
+    totalTarjetas+=ars+(dolarBlue>0?usd*dolarBlue:0);
+  });
 
   document.getElementById('hero-total').textContent=fmt(totalARS);
   document.getElementById('hero-sub').textContent=new Date().toLocaleDateString('es-AR',{month:'long',year:'numeric'});
@@ -1266,16 +1269,22 @@ function updateHero(){
 }
 
 function getGastosPeriodoActual(tId,gList){
-  const cfg=cierres[tId];if(!cfg?.dia)return 0;
+  const cfg=cierres[tId];if(!cfg?.dia)return{ars:0,usd:0};
   const desde=inicioPeriodo(cfg.dia),hasta=proximoCierreFecha(cfg.dia);
-  return gList.filter(g=>{
-    if(g.pago!=tId||g.moneda==='USD')return false;
+  let ars=0,usd=0;
+  gList.filter(g=>{
+    if(g.pago!=tId)return false;
     if(g.cuotas){const n=calcularCuotaActual(g.fecha,cfg.dia);return n>=1&&n<=g.cuotas;}
     const fd=new Date(g.fecha+'T00:00:00');return fd>=desde&&fd<=hasta;
-  }).reduce((a,g)=>a+g.monto,0);
+  }).forEach(g=>{
+    if(g.moneda==='USD') usd+=g.monto;
+    else ars+=g.monto;
+  });
+  return{ars,usd};
 }
 
 function renderDashboard(){
+  const INTERES=0.0121;
   const hoy=new Date();let eventos=[];
   tarjetas.filter(t=>t.esTarjeta&&cierres[t.id]).forEach(t=>{
     const fC=proximoCierreFecha(cierres[t.id].dia);
@@ -1296,7 +1305,11 @@ function renderDashboard(){
   c.innerHTML=tCred.map(t=>{
     if(!cierres[t.id])return`<div class="pago-row" style="--row-accent:${t.color};opacity:0.6"><div class="row-top"><div class="ico" style="background:${t.color}22">${t.icono}</div><div class="info"><div class="name">${t.nombre}</div><div class="detail" style="color:var(--warning)">⚙ Configurar cierre y límite</div></div></div></div>`;
     const cfg=cierres[t.id];
-    const total=getGastosPeriodoActual(t.id,gastos);
+    const {ars,usd}=getGastosPeriodoActual(t.id,gastos);
+    const usdEnArs=dolarBlue>0?usd*dolarBlue:0;
+    const totalArsConUSD=ars+usdEnArs;
+    const interes=Math.round(totalArsConUSD*INTERES);
+    const totalConInteres=totalArsConUSD+interes;
     const fDesde=inicioPeriodo(cfg.dia),fHasta=proximoCierreFecha(cfg.dia);
     const strDesde=fDesde.toLocaleDateString('es-AR',{day:'numeric',month:'short'});
     const strHasta=fHasta.toLocaleDateString('es-AR',{day:'numeric',month:'short'});
@@ -1305,13 +1318,19 @@ function renderDashboard(){
     const alertC=diff<=2?'color:var(--danger)':'color:var(--muted)';
     let barHtml='';
     if(cfg.limite){
-      const pct=Math.min((total/cfg.limite)*100,100);
+      const pct=Math.min((totalArsConUSD/cfg.limite)*100,100);
       const cls=pct>=100?'over':pct>=75?'warn':'ok';
-      const resto=cfg.limite-total;
-      const txt=pct>=100?`⚠ Límite superado en ${fmt(total-cfg.limite)}`:`Disponible: ${fmt(resto)} de ${fmt(cfg.limite)}`;
+      const resto=cfg.limite-totalArsConUSD;
+      const txt=pct>=100?`⚠ Límite superado en ${fmt(totalArsConUSD-cfg.limite)}`:`Disponible: ${fmt(resto)} de ${fmt(cfg.limite)}`;
       const col=pct>=100?'var(--danger)':pct>=75?'var(--warning)':'var(--success)';
       barHtml=`<div class="bar-wrap"><div class="bar ${cls}" style="width:${pct}%"></div></div><div class="limite-txt" style="color:${col}">${txt}</div>`;
     }
+    // Texto del total a pagar con detalle USD e interés
+    let totalTexto=`${fmt(totalConInteres)}`;
+    let detalleTexto='';
+    if(usd>0) detalleTexto+=`${fmt(ars)} ARS + ${fmt(usd,'USD')}${dolarBlue>0?` (≈${fmt(usdEnArs)})`:''}`;
+    else detalleTexto+=`${fmt(ars)} gastado`;
+    if(interes>0) detalleTexto+=` + ${fmt(interes)} interés (1.21%)`;
     return`<div class="pago-row" style="--row-accent:${t.color}">
       <div class="row-top">
         <div class="ico" style="background:${t.color}22">${t.icono}</div>
@@ -1319,10 +1338,10 @@ function renderDashboard(){
           <div class="name">${t.nombre}</div>
           <div class="detail"><span class="periodo-badge">${strDesde} → ${strHasta}</span></div>
         </div>
-        <div class="monto-grande" style="color:${t.color}">${fmt(total)}</div>
+        <div class="monto-grande" style="color:${t.color}">${totalTexto}</div>
       </div>
       ${barHtml}
-      <div class="cierre-info"><span style="${alertC}">${txtC}</span><span>${fmt(total)} gastado</span></div>
+      <div class="cierre-info"><span style="${alertC}">${txtC}</span><span style="text-align:right;font-size:11px;color:var(--muted)">${detalleTexto}</span></div>
     </div>`;
   }).join('');
 }
