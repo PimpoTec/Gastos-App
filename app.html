@@ -43,7 +43,7 @@
     .btn-logout{font-size:11px;font-weight:700;padding:6px 14px;background:var(--danger-dim);color:var(--danger);border:1px solid rgba(242,61,79,0.2);border-radius:99px;cursor:pointer}
 
     /* ── Hero card ── */
-    .hero-card{background:linear-gradient(145deg,#003d6b 0%,#0062a3 50%,#0077c2 100%) !important;border-radius:var(--radius);padding:20px 20px 18px;margin-bottom:0;position:relative;overflow:hidden;box-shadow:var(--shadow-accent)}
+    .hero-card{background:linear-gradient(145deg,#003d6b 0%,#0062a3 50%,#0077c2 100%);border-radius:var(--radius);padding:20px 20px 18px;margin-bottom:0;position:relative;overflow:hidden;box-shadow:var(--shadow-accent)}
     .hero-card::before{content:'';position:absolute;top:-60px;right:-40px;width:200px;height:200px;border-radius:50%;background:rgba(255,255,255,0.04)}
     .hero-card::after{content:'';position:absolute;bottom:-60px;left:-20px;width:160px;height:160px;border-radius:50%;background:rgba(0,0,0,0.12)}
     .hero-lbl{font-size:11px;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:.09em;margin-bottom:6px;font-weight:600}
@@ -1246,19 +1246,22 @@ function updateHero(){
       :fmt(totalUSD,'USD');
   }
 
-  // Semáforo de presupuesto
+  // Semáforo — cambia el color del hero card completo
+  const heroCard=document.querySelector('#header-hero-gastos .hero-card');
   const semEl=document.getElementById('hero-semaforo');
-  if(semEl){
+  if(heroCard&&semEl){
     if(presupuestoMensual>0){
       const sem=getSemaforoColor(totalARS,presupuestoMensual);
       if(sem){
+        heroCard.style.background=`linear-gradient(145deg,${sem.bg} 0%,${sem.bg}dd 100%)`;
         semEl.style.display='inline-block';
-        semEl.style.background=sem.bg+'55';
+        semEl.style.background='rgba(0,0,0,0.2)';
         semEl.style.color=sem.color;
-        semEl.style.borderColor=sem.color+'55';
+        semEl.style.borderColor=sem.color+'88';
         semEl.textContent=sem.label;
       }
     } else {
+      heroCard.style.background='linear-gradient(145deg,#003d6b 0%,#0062a3 50%,#0077c2 100%)';
       semEl.style.display='none';
     }
   }
