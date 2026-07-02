@@ -1647,7 +1647,11 @@ function renderSubs(){
   const ssMesHero=document.getElementById('ss-mes-hero');
   const ssUsdHero=document.getElementById('ss-usd-hero');
   if(ssMesHero) ssMesHero.textContent=fmt(arsTotal);
-  if(ssUsdHero) ssUsdHero.textContent=fmt(usdTotal,'USD');
+  if(ssUsdHero){
+    ssUsdHero.innerHTML=dolarBlue>0&&usdTotal>0
+      ?`${fmt(usdTotal,'USD')}<br><span style="font-size:10px;opacity:.7">≈ ${fmt(usdTotal*dolarBlue)}</span>`
+      :fmt(usdTotal,'USD');
+  }
 
   // Próximos débitos
   const eventosSubs=subs.map(s=>{
@@ -1700,7 +1704,12 @@ function renderBalance(){
     return d.getMonth()===mesRef.getMonth()&&d.getFullYear()===mesRef.getFullYear();
   });
   const diaRef=mesOffset===0?hoy.getDate():new Date(mesRef.getFullYear(),mesRef.getMonth()+1,0).getDate();
-  const totalSubs=subs.filter(s=>s.moneda!=='USD'&&diaRef>=s.dia).reduce((a,s)=>a+s.monto,0);
+  const mesNum2=mesRef.getMonth()+1;const anioNum2=mesRef.getFullYear();
+  const totalSubs=subs.filter(s=>{
+    if(s.moneda==='USD')return false;
+    const pago=pagosSubs.find(p=>p.sub_id===s.id&&p.mes===mesNum2&&p.anio===anioNum2);
+    return pago?.pagado===true;
+  }).reduce((a,s)=>a+s.monto,0);
   const totalGastos=mesGSinTC.reduce((a,g)=>a+g.monto,0)+totalSubs;
   const balance=totalIngresos-totalGastos;
   const hero=document.getElementById('balance-hero');
