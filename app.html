@@ -1707,4 +1707,218 @@ function renderBalance(){
   const maxCat=Math.max(...Object.values(porCat),1);
   document.getElementById('balance-cats').innerHTML=Object.entries(porCat).sort((a,b)=>b[1]-a[1]).map(([catId,total])=>{
     const c=getCatIngreso(catId);const pct=Math.round((total/maxCat)*100);
-    return`<div cla
+    return`<div class="cat-ingreso-row"><div style="font-size:20px;margin-right:4px">${c.icono}</div><div style="flex:1"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:14px;font-weight:500">${c.nombre}</span><span style="font-size:14px;font-weight:700;color:var(--success)">${fmt(total)}</span></div><div class="bar-wrap"><div class="bar" style="width:${pct}%;background:${c.color}"></div></div></div></div>`;
+  }).join('')||'<div style="font-size:13px;color:var(--muted);padding:8px 0">Sin ingresos este mes</div>';
+  const lista=document.getElementById('i-lista');
+  const iMes=[...ingresos].filter(i=>{const d=new Date(i.fecha+'T00:00:00');return d.getMonth()===mesRef.getMonth()&&d.getFullYear()===mesRef.getFullYear();}).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
+  if(!iMes.length){lista.innerHTML=`<div class="empty"><div class="ico">💚</div><p>Sin ingresos este mes.</p></div>`;return;}
+  lista.innerHTML=iMes.map(i=>{
+    const c=getCatIngreso(i.cat);const fl=new Date(i.fecha+'T00:00:00').toLocaleDateString('es-AR',{day:'numeric',month:'short'});const usdTag=i.moneda==='USD'?`<span class="usd-tag">USD</span>`:'';
+    return`<div class="ingreso-item" onclick="openModalIngreso(${i.id})"><div class="ico">${c.icono}</div><div class="info"><div class="desc">${i.desc}</div><div class="meta">${c.nombre} · ${fl} ${usdTag}</div></div><div class="amount">${fmt(i.monto,i.moneda)}</div></div>`;
+  }).join('');
+}
+
+function renderNotifConfig(){
+  const container = document.getElementById('notif-config-list');
+  if(!container) return;
+  const tarjetasCredito = tarjetas.filter(t=>t.esTarjeta&&cierres[t.id]);
+  let html = '';
+
+  function itemHtml(key, nombre, ico, bg, defaultDias){
+    const cfg = notifConfig[key] || {activo:true, dias:defaultDias, hora:9, personalizado:false};
+    const esCustom = cfg.personalizado || false;
+    return `<div class="notif-item" id="notif_${key}">
+      <div class="ico" style="background:${bg}">${ico}</div>
+      <div class="info">
+        <div class="name">${nombre}</div>
+        <div style="margin-top:6px;display:flex;flex-direction:column;gap:6px">
+          <select class="dias-select" id="tipo_${key}" onchange="onNotifTipoChange('${key}')" ${!cfg.activo?'disabled':''}>
+            <option value="1"  ${!esCustom&&cfg.dias===1?'selected':''}>1 día antes</option>
+            <option value="2"  ${!esCustom&&cfg.dias===2?'selected':''}>2 días antes</option>
+            <option value="3"  ${!esCustom&&cfg.dias===3?'selected':''}>3 días antes</option>
+            <option value="custom" ${esCustom?'selected':''}>Personalizado</option>
+          </select>
+          <div id="custom_${key}" style="display:${esCustom?'flex':'none'};gap:8px;align-items:center">
+            <input type="number" id="cDias_${key}" min="0" max="30" value="${cfg.diasCustom||defaultDias}"
+              placeholder="Días" ${!cfg.activo?'disabled':''}
+              onchange="updateNotifConfig('${key}')"
+              style="width:70px;padding:5px 8px;font-size:13px;background:var(--card-2);border:1px solid var(--border-2);border-radius:8px;color:var(--text)">
+            <span style="font-size:12px;color:var(--muted)">días antes a las</span>
+            <input type="number" id="cHora_${key}" min="0" max="23" value="${cfg.hora??9}"
+              placeholder="Hora" ${!cfg.activo?'disabled':''}
+              onchange="updateNotifConfig('${key}')"
+              style="width:60px;padding:5px 8px;font-size:13px;background:var(--card-2);border:1px solid var(--border-2);border-radius:8px;color:var(--text)">
+            <span style="font-size:12px;color:var(--muted)">hs</span>
+          </div>
+        </div>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" ${cfg.activo?'checked':''} onchange="toggleNotif('${key}',this.checked)">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>`;
+  }
+
+  if(tarjetasCredito.length){
+    html += `<div style="font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Cierres de tarjeta</div>`;
+    html += tarjetasCredito.map(t => itemHtml(`tarjeta_${t.id}`, t.nombre, t.icono, `${t.color}22`, 2)).join('');
+  }
+
+  if(subs.length){
+    html += `<div style="font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin:16px 0 8px">Suscripciones</div>`;
+    html += subs.map(s => {
+      const c=getCat(s.cat,'sub');
+      return itemHtml(`sub_${s.id}`, s.nombre, c.icono, `${c.color}22`, 1);
+    }).join('');
+  }
+
+  if(!tarjetasCredito.length && !subs.length){
+    html = '<div style="font-size:13px;color:var(--muted)">Primero configurá tarjetas de crédito (con cierre) y suscripciones.</div>';
+  }
+
+  container.innerHTML = html;
+}
+
+function onNotifTipoChange(key){
+  const sel = document.getElementById(`tipo_${key}`);
+  const customDiv = document.getElementById(`custom_${key}`);
+  const esCustom = sel.value === 'custom';
+  customDiv.style.display = esCustom ? 'flex' : 'none';
+  updateNotifConfig(key);
+}
+
+async function toggleNotif(key, activo){
+  notifConfig[key] = { ...(notifConfig[key]||{dias:key.startsWith('tarjeta')?2:1,hora:9}), activo };
+  // Habilitar/deshabilitar los inputs
+  ['tipo_','cDias_','cHora_'].forEach(p=>{
+    const el=document.getElementById(p+key);
+    if(el) el.disabled = !activo;
+  });
+  await dbGuardarNotifConfig(notifConfig);
+}
+
+async function updateNotifConfig(key){
+  const tipoSel = document.getElementById(`tipo_${key}`);
+  if(!tipoSel) return;
+  const esCustom = tipoSel.value === 'custom';
+  const diasInput = document.getElementById(`cDias_${key}`);
+  const horaInput = document.getElementById(`cHora_${key}`);
+  const cfg = notifConfig[key] || {};
+  notifConfig[key] = {
+    ...cfg,
+    personalizado: esCustom,
+    dias: esCustom ? (parseInt(diasInput?.value)||1) : parseInt(tipoSel.value),
+    diasCustom: esCustom ? (parseInt(diasInput?.value)||1) : cfg.diasCustom,
+    hora: parseInt(horaInput?.value ?? cfg.hora ?? 9),
+  };
+  await dbGuardarNotifConfig(notifConfig);
+}
+
+function renderPerfil(){
+  const nombre=nombrePerfil||currentUser?.email?.split('@')[0]||'Usuario';
+  document.getElementById('perfil-nombre-display').textContent=nombre;
+  document.getElementById('perfil-email').textContent=currentUser?.email||'';
+  document.getElementById('n-nombre').value=nombrePerfil;
+  renderNotifConfig();
+  const pEl=document.getElementById('perfil-presupuesto-val');
+  if(pEl) pEl.textContent=presupuestoMensual>0?`${fmt(presupuestoMensual)}/mes`:'Sin configurar';
+  const dEl=document.getElementById('perfil-dolar-val');
+  if(dEl) dEl.textContent=dolarBlue>0?`$${dolarBlue.toLocaleString('es-AR')} (blue)`:'No cargado — tocá para actualizar';
+  const lt=document.getElementById('lista-tarjetas');
+  lt.innerHTML=tarjetas.map(t=>`<div class="config-item" onclick="openModalTarjeta(${t.id})"><div class="ico-box" style="background:${t.color}22">${t.icono}</div><div style="flex:1"><div class="name">${t.nombre}</div><div class="sub">${t.esTarjeta?'Tarjeta de crédito':'Otro medio'}</div></div><div class="arr">›</div></div>`).join('')
+  ||'<div style="font-size:13px;color:var(--muted);padding:8px 0 12px">Sin medios de pago</div>';
+  const lcg=document.getElementById('lista-cats-gasto');
+  lcg.innerHTML=cats.filter(c=>c.tipo==='gasto').map(c=>`<div class="config-item" onclick="openModalCat('gasto',${c.id})"><div class="ico-box" style="background:${c.color}22">${c.icono}</div><div class="name">${c.nombre}</div><div class="arr">›</div></div>`).join('')
+  ||'<div style="font-size:13px;color:var(--muted);padding:8px 0 12px">Sin categorías</div>';
+  const lcs=document.getElementById('lista-cats-sub');
+  lcs.innerHTML=cats.filter(c=>c.tipo==='sub').map(c=>`<div class="config-item" onclick="openModalCat('sub',${c.id})"><div class="ico-box" style="background:${c.color}22">${c.icono}</div><div class="name">${c.nombre}</div><div class="arr">›</div></div>`).join('')
+  ||'<div style="font-size:13px;color:var(--muted);padding:8px 0 12px">Sin categorías</div>';
+}
+
+function irAIngresos(){closeModals();switchTab('balance');}
+
+function checkRecordatorioMes(){
+  const hoy=new Date();
+  const diaHoy=hoy.getDate();
+  if(diaHoy>5)return; // Solo mostrar los primeros 5 días del mes
+  const claveMes=`recordatorio_${hoy.getFullYear()}_${hoy.getMonth()}`;
+  if(localStorage.getItem(claveMes))return; // Ya se mostró este mes
+  // Ver si ya hay ingresos cargados este mes
+  const tieneIngresos=ingresos.some(i=>{
+    const d=new Date(i.fecha+'T00:00:00');
+    return d.getMonth()===hoy.getMonth()&&d.getFullYear()===hoy.getFullYear();
+  });
+  if(tieneIngresos)return; // Ya tiene ingresos, no molestar
+  localStorage.setItem(claveMes,'shown');
+  document.getElementById('recordatorio-mes').textContent=
+    hoy.toLocaleDateString('es-AR',{month:'long',year:'numeric'});
+  openModalWithHistory('modal-recordatorio');
+}
+
+// ── Web Push nativo ──────────────────────────────────
+const VAPID_PUBLIC_KEY = 'BJsv7shyE837UZkQE_LAkanF79RokFSFq3hAOmck2VN5MjsM2__YS89n11eQZHyUE23ihiuz7rJvrU7U1owQM38';
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+
+async function initPushNotifications() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    // Pedir permiso
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') return;
+    // Suscribir al push
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+      });
+    }
+    // Guardar en Supabase
+    const subJson = sub.toJSON();
+    await sb.from('dispositivos').upsert(
+      { user_id: currentUser.id, subscription: subJson },
+      { onConflict: 'user_id' }
+    );
+    console.log('Push registrado OK');
+  } catch(e) {
+    console.log('Push error:', e);
+  }
+}
+
+// ── Init ─────────────────────────────────────────────
+(async()=>{
+  try{
+    showLoading('Verificando sesión...');
+    const{data:{session}}=await sb.auth.getSession();
+    if(!session){window.location.href='login.html';return;}
+    currentUser=session.user;
+    showLoading('Cargando datos...');
+    [gastos,subs,ingresos,tarjetas,cats,pagosSubs]=await Promise.all([
+      dbCargarGastos(),dbCargarSubs(),dbCargarIngresos(),dbCargarTarjetas(),dbCargarCats(),dbCargarPagosSubs()
+    ]);
+    const configData = await dbCargarConfig();
+    cierres = configData.cierres;
+    notifConfig = configData.notifConfig;
+    dolarBlue = configData.dolarBlue;
+    presupuestoMensual = configData.presupuesto;
+    actualizarDolarSiNecesario(configData.dolarUpdated);
+    hideLoading();
+    renderAll();
+    setTimeout(checkRecordatorioMes, 800);
+    setTimeout(initPushNotifications, 2000);
+  }catch(e){
+    console.error('Init error:',e);
+    document.getElementById('loading-msg').textContent='Error: '+e.message;
+  }
+})();
+</script>
+<script>if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}</script>
+</body>
+</html>
