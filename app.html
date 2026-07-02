@@ -254,7 +254,9 @@
     .tc-tab.active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent)}
 
     /* ── Misc ── */
-    .search-box{width:100%;margin-bottom:14px;padding:12px 16px;background:var(--card);border:1.5px solid var(--border-2);border-radius:var(--radius-sm);color:var(--text);font-size:14px;outline:none;font-weight:500}
+    .ver-mas-btn{width:100%;padding:10px;background:transparent;color:var(--accent);border:1px solid var(--border-2);border-radius:var(--radius-sm);font-size:13px;font-weight:600;cursor:pointer;margin-top:4px;margin-bottom:8px;transition:background .15s;font-family:inherit}
+    .ver-mas-btn:active{background:var(--accent-dim)}
+    .collapsible-hidden{display:none}
     .search-box:focus{border-color:var(--accent)}
     .search-box::placeholder{color:var(--muted)}
     .checkbox-wrap{display:flex;align-items:center;gap:10px;background:var(--card);padding:13px 14px;border-radius:var(--radius-xs);border:1.5px solid var(--border-2);cursor:pointer;font-size:14px;font-weight:600}
@@ -686,6 +688,27 @@ async function dbCargarSubs(){
 }
 async function dbUpsertSub(s){await sb.from('suscripciones').upsert({id:s.id,user_id:currentUser.id,nombre:s.nombre,monto:s.monto,pago:s.pago,dia:s.dia,cat:s.cat,moneda:s.moneda||'ARS'});}
 async function dbDeleteSub(id){await sb.from('suscripciones').delete().eq('id',id).eq('user_id',currentUser.id);}
+
+// ── Helper lista colapsable ──────────────────────────
+function renderCollapsible(items, renderItem, containerId, limite=2){
+  if(!items.length) return '';
+  const visibles = items.slice(0, limite);
+  const ocultos = items.slice(limite);
+  let html = visibles.map(renderItem).join('');
+  if(ocultos.length){
+    const uid = containerId + '_extra';
+    html += `<div id="${uid}" class="collapsible-hidden">${ocultos.map(renderItem).join('')}</div>`;
+    html += `<button class="ver-mas-btn" onclick="toggleCollapsible('${uid}',this)">Ver ${ocultos.length} más ▾</button>`;
+  }
+  return html;
+}
+function toggleCollapsible(id, btn){
+  const el=document.getElementById(id);
+  if(!el)return;
+  const isHidden=el.classList.contains('collapsible-hidden');
+  el.classList.toggle('collapsible-hidden', !isHidden);
+  btn.textContent=isHidden?'Ver menos ▴':`Ver ${el.children.length} más ▾`;
+}
 
 // ── Pagos de suscripciones ───────────────────────────
 async function dbCargarPagosSubs(){
@@ -1670,7 +1693,8 @@ function renderSubs(){
   const lista=document.getElementById('s-lista');
   if(!subs.length){lista.innerHTML=`<div class="empty"><div class="ico">🔄</div><p>Sin suscripciones.</p></div>`;return;}
   const hoyDia=hoy.getDate();
-  lista.innerHTML=[...subs].sort((a,b)=>a.dia-b.dia).map(s=>{
+  const subsOrdenadas=[...subs].sort((a,b)=>a.dia-b.dia);
+  const renderSubItem=s=>{
     const t=getTarjeta(s.pago);const c=getCat(s.cat,'sub');
     const diff=s.dia>=hoyDia?s.dia-hoyDia:30-hoyDia+s.dia;
     const prox=diff>=0&&diff<=5;
@@ -1679,7 +1703,8 @@ function renderSubs(){
       ?`<div class="amount">${fmt(s.monto,'USD')}</div><div style="font-size:10px;color:var(--muted);margin-top:2px">≈ ${fmt(s.monto*dolarBlue)}/mes</div>`
       :`<div class="amount">${fmt(s.monto,s.moneda)}</div><div style="font-size:11px;color:var(--muted);margin-top:2px">/mes</div>`;
     return`<div class="gasto-item" style="${prox?'border:1.5px solid rgba(255,212,59,0.4)':''}" onclick="openModalSub(${s.id})"><div class="ico" style="background:${c.color}22">${c.icono}</div><div class="info"><div class="desc">${s.nombre}</div><div class="meta"><span style="color:${t.color}">${t.icono} ${t.nombre}</span> · día ${s.dia} ${usdTag}</div></div><div class="right">${montoHtml}</div></div>`;
-  }).join('');
+  };
+  lista.innerHTML=renderCollapsible(subsOrdenadas, renderSubItem, 's-lista', 3);
 }
 
 function renderBalance(){
@@ -1850,14 +1875,21 @@ function renderPerfil(){
   const dEl=document.getElementById('perfil-dolar-val');
   if(dEl) dEl.textContent=dolarBlue>0?`$${dolarBlue.toLocaleString('es-AR')} (blue)`:'No cargado — tocá para actualizar';
   const lt=document.getElementById('lista-tarjetas');
-  lt.innerHTML=tarjetas.map(t=>`<div class="config-item" onclick="openModalTarjeta(${t.id})"><div class="ico-box" style="background:${t.color}22">${t.icono}</div><div style="flex:1"><div class="name">${t.nombre}</div><div class="sub">${t.esTarjeta?'Tarjeta de crédito':'Otro medio'}</div></div><div class="arr">›</div></div>`).join('')
-  ||'<div style="font-size:13px;color:var(--muted);padding:8px 0 12px">Sin medios de pago</div>';
+  if(tarjetas.length){
+    lt.innerHTML=renderCollapsible(tarjetas,t=>`<div class="config-item" onclick="openModalTarjeta(${t.id})"><div class="ico-box" style="background:${t.color}22">${t.icono}</div><div style="flex:1"><div class="name">${t.nombre}</div><div class="sub">${t.esTarjeta?'Tarjeta de crédito':'Otro medio'}</div></div><div class="arr">›</div></div>`,'lista-tarjetas',3);
+  }else{lt.innerHTML='<div style="font-size:13px;color:var(--muted);padding:8px 0 12px">Sin medios de pago</div>';}
+
+  const catsGasto=cats.filter(c=>c.tipo==='gasto');
   const lcg=document.getElementById('lista-cats-gasto');
-  lcg.innerHTML=cats.filter(c=>c.tipo==='gasto').map(c=>`<div class="config-item" onclick="openModalCat('gasto',${c.id})"><div class="ico-box" style="background:${c.color}22">${c.icono}</div><div class="name">${c.nombre}</div><div class="arr">›</div></div>`).join('')
-  ||'<div style="font-size:13px;color:var(--muted);padding:8px 0 12px">Sin categorías</div>';
+  if(catsGasto.length){
+    lcg.innerHTML=renderCollapsible(catsGasto,c=>`<div class="config-item" onclick="openModalCat('gasto',${c.id})"><div class="ico-box" style="background:${c.color}22">${c.icono}</div><div class="name">${c.nombre}</div><div class="arr">›</div></div>`,'lista-cats-gasto',3);
+  }else{lcg.innerHTML='<div style="font-size:13px;color:var(--muted);padding:8px 0 12px">Sin categorías</div>';}
+
+  const catsSub=cats.filter(c=>c.tipo==='sub');
   const lcs=document.getElementById('lista-cats-sub');
-  lcs.innerHTML=cats.filter(c=>c.tipo==='sub').map(c=>`<div class="config-item" onclick="openModalCat('sub',${c.id})"><div class="ico-box" style="background:${c.color}22">${c.icono}</div><div class="name">${c.nombre}</div><div class="arr">›</div></div>`).join('')
-  ||'<div style="font-size:13px;color:var(--muted);padding:8px 0 12px">Sin categorías</div>';
+  if(catsSub.length){
+    lcs.innerHTML=renderCollapsible(catsSub,c=>`<div class="config-item" onclick="openModalCat('sub',${c.id})"><div class="ico-box" style="background:${c.color}22">${c.icono}</div><div class="name">${c.nombre}</div><div class="arr">›</div></div>`,'lista-cats-sub',3);
+  }else{lcs.innerHTML='<div style="font-size:13px;color:var(--muted);padding:8px 0 12px">Sin categorías</div>';}
 }
 
 function irAIngresos(){closeModals();switchTab('balance');}
