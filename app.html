@@ -32,7 +32,7 @@
     :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
     html,body{height:100%;height:100dvh;overflow:hidden;background:var(--bg)}
     body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:var(--text);-webkit-font-smoothing:antialiased;font-feature-settings:"tnum"}
-    .app{display:flex;flex-direction:column;height:100dvh;height:-webkit-fill-available}
+    .app{position:fixed;inset:0;display:flex;flex-direction:column}
 
     /* ── Header ── */
     .header{padding:10px 16px 10px;padding-top:calc(env(safe-area-inset-top,0px) + 10px);background:var(--bg);flex-shrink:0;border-bottom:1px solid var(--border)}
@@ -56,8 +56,8 @@
     .hero-mini .val{font-size:22px;font-weight:800;color:rgba(255,255,255,0.95);letter-spacing:-0.5px}
 
     /* ── Layout ── */
-    .content{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:16px 16px;padding-bottom:calc(var(--bottom-nav) + max(var(--safe-bottom),16px) + 72px)}
-    .bottom-nav{display:flex;background:rgba(5,8,16,0.97);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-top:1px solid var(--border);padding-bottom:max(var(--safe-bottom),12px);flex-shrink:0;position:fixed;bottom:0;left:0;right:0;z-index:50}
+    .content{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:16px 16px;padding-bottom:24px}
+    .bottom-nav{display:flex;background:rgba(5,8,16,0.97);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-top:1px solid var(--border);padding-bottom:max(var(--safe-bottom),12px);flex-shrink:0;z-index:50;width:100%}
     @media (display-mode: standalone) {
       .bottom-nav{padding-bottom:max(var(--safe-bottom),56px)}
       .content{padding-bottom:calc(var(--bottom-nav) + max(var(--safe-bottom),56px) + 20px)}
@@ -2088,6 +2088,7 @@ async function initPushNotifications() {
     presupuestoMensual = configData.presupuesto;
     actualizarDolarSiNecesario(configData.dolarUpdated);
     hideLoading();
+    switchTab('gastos');
     renderAll();
     setTimeout(checkRecordatorioMes, 800);
     setTimeout(checkBienvenida, 1200);
