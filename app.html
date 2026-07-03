@@ -56,8 +56,8 @@
     .hero-mini .val{font-size:22px;font-weight:800;color:rgba(255,255,255,0.95);letter-spacing:-0.5px}
 
     /* ── Layout ── */
-    .content{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:16px 16px;padding-bottom:calc(var(--bottom-nav) + max(var(--safe-bottom),16px) + 20px)}
-    .bottom-nav{display:flex;background:rgba(5,8,16,0.97);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-top:1px solid var(--border);padding-bottom:max(var(--safe-bottom),12px);flex-shrink:0;position:sticky;bottom:0;z-index:50;width:100%}
+    .content{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:16px 16px;padding-bottom:calc(var(--bottom-nav) + max(var(--safe-bottom),16px) + 72px)}
+    .bottom-nav{display:flex;background:rgba(5,8,16,0.97);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-top:1px solid var(--border);padding-bottom:max(var(--safe-bottom),12px);flex-shrink:0;position:fixed;bottom:0;left:0;right:0;z-index:50}
     @media (display-mode: standalone) {
       .bottom-nav{padding-bottom:max(var(--safe-bottom),56px)}
       .content{padding-bottom:calc(var(--bottom-nav) + max(var(--safe-bottom),56px) + 20px)}
@@ -1241,6 +1241,7 @@ function renderAll(){
   updateHero();renderDashboard();renderFeed();
   if(tabActual==='cuotas') renderCuotasTabs(); else renderCuotas();
   renderSubs();
+  const b=document.getElementById('buscador-gastos');if(b)b.style.display='block';
 }
 
 function getGastosMes(){
@@ -1691,9 +1692,9 @@ function getSubsPendientes(){
   const mes=hoy.getMonth()+1;
   const anio=hoy.getFullYear();
   return subs.filter(s=>{
-    const diff=s.dia-diaHoy;
-    if(diff>3||diff<-3)return false;
-    // Solo ocultar si fue confirmada como PAGADA
+    // Solo mostrar si el día de débito ya pasó este mes
+    if(s.dia>diaHoy) return false;
+    // Y no fue confirmada como pagada
     const pagada=pagosSubs.find(p=>p.sub_id===s.id&&p.mes===mes&&p.anio===anio&&p.pagado===true);
     return !pagada;
   });
@@ -1749,22 +1750,34 @@ function renderSubs(){
       :fmt(usdTotal,'USD');
   }
 
-  // Próximos débitos
+  // Próximos débitos — con botón Ya pagué
+  const mes=hoy.getMonth()+1;
+  const anio=hoy.getFullYear();
   const eventosSubs=subs.map(s=>{
     let fS=new Date(hoy.getFullYear(),hoy.getMonth(),s.dia);
     if(hoy.getDate()>s.dia)fS.setMonth(fS.getMonth()+1);
     const diff=Math.ceil((fS-hoy)/(1000*60*60*24));
-    return{nombre:s.nombre,diff,monto:s.monto,moneda:s.moneda,cat:s.cat};
-  }).sort((a,b)=>a.diff-b.diff);
+    const pagada=pagosSubs.find(p=>p.sub_id===s.id&&p.mes===mes&&p.anio===anio&&p.pagado===true);
+    return{id:s.id,nombre:s.nombre,diff,monto:s.monto,moneda:s.moneda,cat:s.cat,pagada:!!pagada};
+  }).filter(e=>!e.pagada&&e.diff>=0).sort((a,b)=>a.diff-b.diff);
+
   const renderEventoSub=e=>{
     const c=getCat(e.cat,'sub');
     const txt=e.diff===0?'Hoy':e.diff===1?'Mañana':`En ${e.diff} días`;
     const al=e.diff<=2?'alert':'';
-    return`<div class="vencimiento-item ${al}"><div class="vencimiento-ico" style="background:${c.color}22">${c.icono}</div><div style="flex:1"><div style="font-weight:600;font-size:14px">${e.nombre}</div><div style="font-size:12px;color:var(--muted);margin-top:2px">Debita <strong style="color:${e.diff<=2?'var(--danger)':'var(--text)'}">${txt.toLowerCase()}</strong></div></div><div style="font-weight:700;font-size:15px">${fmt(e.monto,e.moneda)}</div></div>`;
+    return`<div class="vencimiento-item ${al}" style="flex-direction:column;align-items:stretch;gap:8px">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div class="vencimiento-ico" style="background:${c.color}22">${c.icono}</div>
+        <div style="flex:1"><div style="font-weight:600;font-size:14px">${e.nombre}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px">Debita <strong style="color:${e.diff<=2?'var(--danger)':'var(--text)'}">${txt.toLowerCase()}</strong></div></div>
+        <div style="font-weight:700;font-size:15px">${fmt(e.monto,e.moneda)}</div>
+      </div>
+      <button onclick="confirmarPago(${e.id},true)" style="width:100%;padding:8px;background:var(--success);color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">✅ Ya lo pagué</button>
+    </div>`;
   };
   document.getElementById('subs-vencimientos-list').innerHTML=eventosSubs.length
     ?renderCollapsible(eventosSubs, renderEventoSub, 'subs-vencimientos-list', 3)
-    :'<div style="font-size:13px;color:var(--muted);padding:8px 0">Sin suscripciones aún 🎉</div>';
+    :'<div style="font-size:13px;color:var(--muted);padding:8px 0">Sin próximos débitos 🎉</div>';
 
   const lista=document.getElementById('s-lista');
   if(!subs.length){lista.innerHTML=`<div class="empty"><div class="ico">🔄</div><p style="font-weight:600;font-size:14px;margin-bottom:6px">Sin suscripciones</p><p style="font-size:13px">Agregá Netflix, Spotify y cualquier servicio que debitás cada mes.</p><button onclick="openModalSub()" style="margin-top:14px;padding:10px 20px;background:var(--accent);color:white;border:none;border-radius:99px;font-size:13px;font-weight:700;cursor:pointer">+ Agregar suscripción</button></div>`;return;}
