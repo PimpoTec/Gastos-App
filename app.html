@@ -1799,10 +1799,11 @@ async function testNotificacion(){
   const btn=document.querySelector('[onclick="testNotificacion()"]');
   if(btn){btn.disabled=true;btn.textContent='Enviando...';}
   try{
+    const session=(await sb.auth.getSession()).data.session;
     const res=await fetch('https://rujgpkiuhofndbmcntuj.supabase.co/functions/v1/notificaciones-push',{
       method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':`Bearer ${(await sb.auth.getSession()).data.session?.access_token}`},
-      body:JSON.stringify({test:true})
+      headers:{'Content-Type':'application/json','Authorization':`Bearer ${session?.access_token}`},
+      body:JSON.stringify({test:true, user_id: currentUser.id})
     });
     const data=await res.json();
     if(btn){btn.disabled=false;btn.textContent=data.enviados>0?'✅ Notificación enviada':'⚠ Sin dispositivos registrados';}
