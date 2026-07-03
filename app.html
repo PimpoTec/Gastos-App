@@ -29,6 +29,7 @@
       --shadow-accent:0 8px 32px rgba(0,158,227,0.22)
     }
     *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+    :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
     html,body{height:100%;height:100dvh;overflow:hidden;background:var(--bg)}
     body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:var(--text);-webkit-font-smoothing:antialiased;font-feature-settings:"tnum"}
     .app{display:flex;flex-direction:column;height:100dvh;height:-webkit-fill-available}
@@ -118,7 +119,6 @@
     /* ── Tarjetas breakdown ── */
     .pago-breakdown{display:flex;flex-direction:column;gap:10px;margin-bottom:24px}
     .pago-row{background:var(--card);border-radius:var(--radius);padding:16px;border:1px solid var(--border);position:relative;overflow:hidden}
-    .pago-row::after{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--row-accent,var(--accent))}
     .pago-row .row-top{display:flex;align-items:center;gap:12px;margin-bottom:12px}
     .pago-row .ico{font-size:20px;width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
     .pago-row .info{flex:1;min-width:0}
@@ -285,8 +285,8 @@
     <div class="header-row">
       <h1>Mis <span>Gastos</span></h1>
       <div class="header-right">
-        <button class="btn-perfil" onclick="switchTab('perfil')">👤</button>
-        <button class="btn-logout" onclick="logout()">Salir</button>
+        <button class="btn-perfil" onclick="switchTab('perfil')" aria-label="Perfil y configuración">👤</button>
+        <button class="btn-buscar" id="btn-buscar" onclick="toggleSearch()" aria-label="Buscar" style="display:none;width:36px;height:36px;border-radius:50%;background:var(--card-2);border:1.5px solid var(--border-2);align-items:center;justify-content:center;cursor:pointer;font-size:16px;flex-shrink:0">🔍</button>
       </div>
     </div>
     <!-- Hero solo en gastos -->
@@ -457,13 +457,10 @@
     <button class="nav-btn" id="nav-balance" onclick="switchTab('balance')">
       <svg viewBox="0 0 24 24"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>Balance
     </button>
-    <button class="nav-btn" id="nav-perfil" onclick="switchTab('perfil')">
-      <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Perfil
-    </button>
   </nav>
 </div>
 
-<button class="fab" id="fab-btn" onclick="abrirModalRapido()" oncontextmenu="event.preventDefault();abrirModalCorrecto()">
+<button class="fab" id="fab-btn" onclick="abrirModalRapido()" oncontextmenu="event.preventDefault();abrirModalCorrecto()" aria-label="Agregar gasto">
   <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
 </button>
 <!-- Mini botón para modal completo -->
@@ -654,6 +651,34 @@
   </div>
 </div>
 
+<!-- Modal Confirmar logout -->
+<div class="modal-overlay" id="modal-logout">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div style="text-align:center;margin-bottom:20px">
+      <div style="font-size:40px;margin-bottom:10px">👋</div>
+      <div class="modal-title" style="text-align:center">¿Cerrar sesión?</div>
+      <p style="font-size:14px;color:var(--muted);line-height:1.5">Podés volver a ingresar cuando quieras.</p>
+    </div>
+    <button class="btn-submit btn-danger" onclick="confirmarLogout()">Cerrar sesión</button>
+    <button class="btn-secondary" onclick="closeModals()">Cancelar</button>
+  </div>
+</div>
+
+<!-- Modal Bienvenida / setup inicial -->
+<div class="modal-overlay" id="modal-bienvenida">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div style="text-align:center;margin-bottom:20px">
+      <div style="font-size:48px;margin-bottom:10px">💸</div>
+      <div class="modal-title" style="text-align:center">¡Bienvenido a Mis Gastos!</div>
+      <p style="font-size:14px;color:var(--muted);line-height:1.6">Para empezar, configurá al menos un<br><strong style="color:var(--text)">medio de pago</strong> (tarjeta, efectivo, etc.).</p>
+    </div>
+    <button class="btn-submit" onclick="closeModals();switchTab('perfil')">Configurar ahora →</button>
+    <button class="btn-secondary" onclick="closeModals()">Lo hago después</button>
+  </div>
+</div>
+
 <script>
 const SUPABASE_URL='https://rujgpkiuhofndbmcntuj.supabase.co';
 const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ1amdwa2l1aG9mbmRibWNudHVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2NjUxMDksImV4cCI6MjA5ODI0MTEwOX0.XppKMyyg53h32L5iBeo6B3LwAe_1VW1_9eas8ysuwYc';
@@ -662,7 +687,9 @@ let currentUser=null;
 
 function showLoading(msg='Cargando...'){document.getElementById('loading-overlay').style.display='flex';document.getElementById('loading-msg').textContent=msg;}
 function hideLoading(){document.getElementById('loading-overlay').style.display='none';}
-async function logout(){await sb.auth.signOut();window.location.href='login.html';}
+function logout(){openModalWithHistory('modal-logout');}
+async function confirmarLogout(){await sb.auth.signOut();window.location.href='login.html';}
+function checkBienvenida(){if(!tarjetas.length)openModalWithHistory('modal-bienvenida');}
 
 // ── Categorías fijas de ingresos ────────────────────
 const CATS_INGRESO=[
@@ -852,11 +879,30 @@ function switchTab(tab){
     const el=document.getElementById('header-hero-'+t);
     if(el) el.style.display = t===tab ? '' : 'none';
   });
-  document.getElementById('fab-btn').style.display=tab==='perfil'?'none':'flex';
+  const fab=document.getElementById('fab-btn');
+  if(tab==='perfil'){
+    fab.style.display='none';
+  }else{
+    fab.style.display='flex';
+    const labels={gastos:'Agregar gasto',cuotas:'Agregar cuota',subs:'Agregar suscripción',balance:'Agregar ingreso'};
+    fab.setAttribute('aria-label',labels[tab]||'Agregar');
+  }
+  // Search icon solo en gastos
+  const btnBuscar=document.getElementById('btn-buscar');
+  if(btnBuscar) btnBuscar.style.display=tab==='gastos'?'flex':'none';
   closeModals();
   if(tab==='perfil') renderPerfil();
   if(tab==='balance') renderBalance();
   if(tab==='cuotas') renderCuotasTabs();
+}
+
+function toggleSearch(){
+  const box=document.getElementById('buscador-gastos');
+  if(!box)return;
+  const wrap=box.closest('.search-wrap')||box.parentElement;
+  const hidden=box.style.display==='none'||!box.offsetParent;
+  if(hidden){box.style.display='block';box.focus();}
+  else{box.style.display='none';box.value='';renderFeed();}
 }
 
 function abrirModalCorrecto(){
@@ -1413,7 +1459,7 @@ function renderCuotas(){
 
   // Lista filtrada por tarjeta seleccionada
   const filtradas=tSel?activas.filter(g=>g.pago==tSel.id):activas;
-  if(!filtradas.length){lista.innerHTML=`<div class="empty"><div class="ico">✅</div><p>Sin cuotas activas${tSel?` en ${tSel.nombre}`:''}.</p></div>`;return;}
+  if(!filtradas.length){lista.innerHTML=`<div class="empty"><div class="ico">✅</div><p style="font-weight:600;font-size:14px;margin-bottom:4px">Sin cuotas activas${tSel?` en ${tSel.nombre}`:''}</p><p style="font-size:13px">Las compras en cuotas aparecen acá.</p></div>`;return;}
   lista.innerHTML=filtradas.map(g=>`<div class="feed-item" onclick="openModalGasto(${g.id})">
     <div class="ico" style="background:${getCat(g.cat,'gasto').color}22">${getCat(g.cat,'gasto').icono}</div>
     <div class="info">
@@ -1591,7 +1637,7 @@ function renderFeed(){
   eventos.sort((a,b)=>b.fecha-a.fecha);
 
   if(!eventos.length){
-    lista.innerHTML=`<div class="empty"><div class="ico">📋</div><p>Sin movimientos aún.</p></div>`;
+    lista.innerHTML=`<div class="empty"><div class="ico">📋</div><p style="font-weight:600;font-size:14px;margin-bottom:6px">Sin movimientos aún</p><p style="font-size:13px">Tocá el <strong style="color:var(--accent)">+</strong> para registrar tu primer gasto.</p></div>`;
     return;
   }
 
@@ -1716,7 +1762,7 @@ function renderSubs(){
     :'<div style="font-size:13px;color:var(--muted);padding:8px 0">Sin suscripciones aún 🎉</div>';
 
   const lista=document.getElementById('s-lista');
-  if(!subs.length){lista.innerHTML=`<div class="empty"><div class="ico">🔄</div><p>Sin suscripciones.</p></div>`;return;}
+  if(!subs.length){lista.innerHTML=`<div class="empty"><div class="ico">🔄</div><p style="font-weight:600;font-size:14px;margin-bottom:6px">Sin suscripciones</p><p style="font-size:13px">Agregá Netflix, Spotify y cualquier servicio que debitás cada mes.</p><button onclick="openModalSub()" style="margin-top:14px;padding:10px 20px;background:var(--accent);color:white;border:none;border-radius:99px;font-size:13px;font-weight:700;cursor:pointer">+ Agregar suscripción</button></div>`;return;}
   const hoyDia=hoy.getDate();
   const subsOrdenadas=[...subs].sort((a,b)=>a.dia-b.dia);
   const renderSubItem=s=>{
@@ -1788,7 +1834,7 @@ function renderBalance(){
   }).join('')||'<div style="font-size:13px;color:var(--muted);padding:8px 0">Sin ingresos este mes</div>';
   const lista=document.getElementById('i-lista');
   const iMes=[...ingresos].filter(i=>{const d=new Date(i.fecha+'T00:00:00');return d.getMonth()===mesRef.getMonth()&&d.getFullYear()===mesRef.getFullYear();}).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
-  if(!iMes.length){lista.innerHTML=`<div class="empty"><div class="ico">💚</div><p>Sin ingresos este mes.</p></div>`;return;}
+  if(!iMes.length){lista.innerHTML=`<div class="empty"><div class="ico">💚</div><p style="font-weight:600;font-size:14px;margin-bottom:6px">Sin ingresos este mes</p><p style="font-size:13px">Registrá tu sueldo y otras entradas para ver tu balance real.</p><button onclick="openModalIngreso()" style="margin-top:14px;padding:10px 20px;background:var(--success);color:white;border:none;border-radius:99px;font-size:13px;font-weight:700;cursor:pointer">+ Agregar ingreso</button></div>`;return;}
   lista.innerHTML=iMes.map(i=>{
     const c=getCatIngreso(i.cat);const fl=new Date(i.fecha+'T00:00:00').toLocaleDateString('es-AR',{day:'numeric',month:'short'});const usdTag=i.moneda==='USD'?`<span class="usd-tag">USD</span>`:'';
     return`<div class="ingreso-item" onclick="openModalIngreso(${i.id})"><div class="ico">${c.icono}</div><div class="info"><div class="desc">${i.desc}</div><div class="meta">${c.nombre} · ${fl} ${usdTag}</div></div><div class="amount">${fmt(i.monto,i.moneda)}</div></div>`;
@@ -2026,6 +2072,7 @@ async function initPushNotifications() {
     hideLoading();
     renderAll();
     setTimeout(checkRecordatorioMes, 800);
+    setTimeout(checkBienvenida, 1200);
     setTimeout(initPushNotifications, 2000);
   }catch(e){
     console.error('Init error:',e);
