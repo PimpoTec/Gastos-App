@@ -514,7 +514,7 @@
     <div class="modal-handle"></div>
     <div class="modal-title">🔄 Suscripción pagada</div>
     <div id="modal-sub-pagada-body"></div>
-    <button class="btn-danger" id="btn-deshacer-pago" style="margin-top:8px">↩ Deshacer pago</button>
+    <button class="btn-danger" id="btn-deshacer-pago" onclick="deshacerPago()" style="margin-top:8px">↩ Deshacer pago</button>
     <button class="btn-secondary" onclick="closeModals()">Cerrar</button>
   </div>
 </div>
@@ -961,18 +961,28 @@ function openModalSubPagada(subId){
         <span style="color:var(--muted)">Confirmado como pagado</span><span style="font-weight:700;color:var(--success)">📅 ${fechaPago}</span>
       </div>
     </div>`;
+  // Guardar subId en el botón para evitar problemas de closure
   const btnDeshacer=document.getElementById('btn-deshacer-pago');
-  btnDeshacer.onclick=async()=>{
-    btnDeshacer.disabled=true;btnDeshacer.textContent='Deshaciendo...';
-    // Eliminar el registro de pago
-    const hoy2=new Date();
-    await sb.from('suscripciones_pagos').delete()
-      .eq('user_id',currentUser.id).eq('sub_id',subId)
-      .eq('mes',hoy2.getMonth()+1).eq('anio',hoy2.getFullYear());
-    pagosSubs=await dbCargarPagosSubs();
-    closeModals();renderAll();
-  };
+  btnDeshacer.dataset.subId=String(subId);
+  btnDeshacer.disabled=false;
+  btnDeshacer.textContent='↩ Deshacer pago';
   openModalWithHistory('modal-sub-pagada');
+}
+
+async function deshacerPago(){
+  const btnDeshacer=document.getElementById('btn-deshacer-pago');
+  const subId=parseInt(btnDeshacer.dataset.subId);
+  if(!subId)return;
+  btnDeshacer.disabled=true;btnDeshacer.textContent='Deshaciendo...';
+  const hoy=new Date();
+  const {error}=await sb.from('suscripciones_pagos').delete()
+    .eq('user_id',currentUser.id)
+    .eq('sub_id',subId)
+    .eq('mes',hoy.getMonth()+1)
+    .eq('anio',hoy.getFullYear());
+  if(error){console.error('Error deshaciendo pago:',error);btnDeshacer.disabled=false;btnDeshacer.textContent='↩ Deshacer pago';return;}
+  pagosSubs=await dbCargarPagosSubs();
+  closeModals();renderAll();
 }
 
 function openModalGasto(id=null){
