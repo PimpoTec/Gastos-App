@@ -57,7 +57,7 @@
 
     /* ── Layout ── */
     .content{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:16px 16px;padding-bottom:calc(var(--bottom-nav) + max(var(--safe-bottom),16px) + 20px)}
-    .bottom-nav{display:flex;background:rgba(5,8,16,0.97);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-top:1px solid var(--border);padding-bottom:max(var(--safe-bottom),12px);flex-shrink:0;position:relative;z-index:50;width:100%}
+    .bottom-nav{display:flex;background:rgba(5,8,16,0.97);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-top:1px solid var(--border);padding-bottom:max(var(--safe-bottom),12px);flex-shrink:0;position:sticky;bottom:0;z-index:50;width:100%}
     @media (display-mode: standalone) {
       .bottom-nav{padding-bottom:max(var(--safe-bottom),56px)}
       .content{padding-bottom:calc(var(--bottom-nav) + max(var(--safe-bottom),56px) + 20px)}
@@ -1691,10 +1691,12 @@ function getSubsPendientes(){
   const mes=hoy.getMonth()+1;
   const anio=hoy.getFullYear();
   return subs.filter(s=>{
-    const diff=Math.abs(s.dia-diaHoy);
-    if(diff>3)return false; // dentro del rango de ±3 días
-    const yaConfirmada=pagosSubs.find(p=>p.sub_id===s.id&&p.mes===mes&&p.anio===anio);
-    return !yaConfirmada;
+    const diff=s.dia-diaHoy;
+    // Mostrar si está dentro de ±3 días del débito
+    if(diff>3||diff<-3)return false;
+    // Solo ocultar si fue explícitamente confirmada (pagado=true o pagado=false)
+    const confirmada=pagosSubs.find(p=>p.sub_id===s.id&&p.mes===mes&&p.anio===anio&&p.pagado!==null);
+    return !confirmada;
   });
 }
 
