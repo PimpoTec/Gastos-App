@@ -759,7 +759,11 @@ async function dbGuardarConfig(c){
 }
 async function dbGuardarNotifConfig(nc){
   notifConfig=nc;
-  await sb.from('config').upsert({user_id:currentUser.id,cierres:cierres,notif_config:nc,dolar_blue:dolarBlue,presupuesto_mensual:presupuestoMensual,updated_at:new Date().toISOString()});
+  const payload = JSON.parse(JSON.stringify(nc)); // copia limpia
+  const {error} = await sb.from('config')
+    .update({notif_config: payload, updated_at: new Date().toISOString()})
+    .eq('user_id', currentUser.id);
+  if(error) console.error('Error guardando notif_config:', error);
 }
 async function dbGuardarDolar(valor){
   dolarBlue=valor;
