@@ -1700,7 +1700,7 @@ function renderFeed(){
       const amountClass=e.esTC?'tc':'neg';
       const prefix=e.esTC?'':'−';
       const montoHtml=e.moneda==='USD'
-        ?`<div style="text-align:right"><div class="amount pos">${fmt(e.monto,'USD')}</div>${dolarBlue>0?`<div style="font-size:10px;color:var(--muted);font-weight:500">≈ ${fmt(e.monto*dolarBlue)}</div>`:''}</div>`
+        ?`<div style="text-align:right"><div class="amount ${amountClass}">${fmt(e.monto,'USD')}</div>${dolarBlue>0?`<div style="font-size:10px;color:var(--muted);font-weight:500">≈ ${fmt(e.monto*dolarBlue)}</div>`:''}</div>`
         :`<div class="amount ${amountClass}">${prefix}${fmt(e.monto)}</div>`;
       htmlStr+=`<div class="feed-item" onclick="openModalGasto(${e.id})">
         <div class="ico" style="background:${c.color}22">${c.icono}</div>
