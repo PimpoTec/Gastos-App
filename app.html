@@ -57,11 +57,10 @@
 
     /* ── Layout ── */
     .content{position:fixed;top:0;left:0;right:0;bottom:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:16px 16px;padding-top:130px;padding-bottom:80px}
-    .bottom-nav{display:flex;background:rgba(5,8,16,0.97);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-top:1px solid var(--border);padding-bottom:max(var(--safe-bottom),12px);position:fixed;bottom:0;left:0;right:0;z-index:50}
+    .bottom-nav{display:flex;background:rgba(5,8,16,0.97);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-top:1px solid var(--border);padding-bottom:env(safe-area-inset-bottom,4px);position:fixed;bottom:0;left:0;right:0;z-index:50}
     @media (display-mode: standalone) {
-      .bottom-nav{padding-bottom:max(var(--safe-bottom),56px)}
-      .content{padding-bottom:calc(var(--bottom-nav) + max(var(--safe-bottom),56px) + 20px)}
-      .fab{bottom:calc(var(--bottom-nav) + max(var(--safe-bottom),56px) + 16px)}
+      .bottom-nav{padding-bottom:env(safe-area-inset-bottom,4px)}
+      .fab{bottom:calc(64px + env(safe-area-inset-bottom,4px) + 12px)}
     }
     .nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 2px;border:none;background:none;color:var(--muted);font-size:10px;font-weight:600;cursor:pointer;transition:color .2s;letter-spacing:.01em}
     .nav-btn svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;transition:all .2s}
@@ -1344,12 +1343,15 @@ function getGastosPeriodoActual(tId,gList){
     if(g.moneda==='USD') usd+=g.monto;
     else ars+=g.monto;
   });
-  // Subs confirmadas como pagadas con esta tarjeta este mes
-  const hoy=new Date();
-  const mes=hoy.getMonth()+1;
-  const anio=hoy.getFullYear();
+  // Subs confirmadas como pagadas con esta tarjeta — solo las del período actual
   subs.filter(s=>String(s.pago)===String(tId)).forEach(s=>{
-    const pagada=pagosSubs.find(p=>p.sub_id===s.id&&p.mes===mes&&p.anio===anio&&p.pagado===true);
+    // Determinar en qué mes cae el débito de la sub dentro del período
+    let fSub=new Date(hasta.getFullYear(),hasta.getMonth(),s.dia);
+    if(s.dia>hasta.getDate()) fSub=new Date(desde.getFullYear(),desde.getMonth(),s.dia);
+    // Solo si el débito cae dentro del período
+    if(fSub<desde||fSub>hasta) return;
+    const subMes=fSub.getMonth()+1, subAnio=fSub.getFullYear();
+    const pagada=pagosSubs.find(p=>p.sub_id===s.id&&p.mes===subMes&&p.anio===subAnio&&p.pagado===true);
     if(pagada){
       if(s.moneda==='USD') usd+=s.monto;
       else ars+=s.monto;
@@ -1651,9 +1653,10 @@ function renderFeed(){
   pagosSubs.filter(p=>p.pagado&&p.mes===hoy.getMonth()+1).forEach(p=>{
     const sub=subs.find(s=>s.id===p.sub_id);
     if(!sub)return;
-    if(query&&!sub.nombre.toLowerCase().includes(query))return;
+    const t=getTarjeta(sub.pago);
+    if(query&&!sub.nombre.toLowerCase().includes(query)&&!t.nombre.toLowerCase().includes(query))return;
     const d=new Date((p.fecha_pago||`${hoy.getFullYear()}-${String(p.mes).padStart(2,'0')}-${String(sub.dia).padStart(2,'0')}`)+'T00:00:00');
-    eventos.push({fecha:d,tipo:'sub_pagada',id:p.sub_id,desc:sub.nombre,monto:sub.monto,moneda:sub.moneda,cat:sub.cat});
+    eventos.push({fecha:d,tipo:'sub_pagada',id:p.sub_id,desc:sub.nombre,monto:sub.monto,moneda:sub.moneda,cat:sub.cat,pago:sub.pago});
   });
 
   // Cierres de tarjeta que ya pasaron este mes
@@ -1686,9 +1689,10 @@ function renderFeed(){
       </div>`;
     } else if(e.tipo==='sub_pagada'){
       const c=getCat(e.cat,'sub');
+      const t=getTarjeta(e.pago);
       htmlStr+=`<div class="feed-item">
         <div class="ico" style="background:${c.color}22">${c.icono}</div>
-        <div class="info"><div class="desc">${e.desc}</div><div class="meta">🔄 Suscripción · Pagada</div></div>
+        <div class="info"><div class="desc">${e.desc}</div><div class="meta">🔄 Suscripción · <span style="color:${t.color}">${t.icono} ${t.nombre}</span></div></div>
         <div class="amount neg">-${fmt(e.monto,e.moneda)}</div>
       </div>`;
     } else {
