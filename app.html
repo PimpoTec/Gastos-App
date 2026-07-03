@@ -1692,17 +1692,20 @@ function getSubsPendientes(){
   const anio=hoy.getFullYear();
   return subs.filter(s=>{
     const diff=s.dia-diaHoy;
-    // Mostrar si está dentro de ±3 días del débito
     if(diff>3||diff<-3)return false;
-    // Solo ocultar si fue explícitamente confirmada (pagado=true o pagado=false)
-    const confirmada=pagosSubs.find(p=>p.sub_id===s.id&&p.mes===mes&&p.anio===anio&&p.pagado!==null);
-    return !confirmada;
+    // Solo ocultar si fue confirmada como PAGADA
+    const pagada=pagosSubs.find(p=>p.sub_id===s.id&&p.mes===mes&&p.anio===anio&&p.pagado===true);
+    return !pagada;
   });
 }
 
 async function confirmarPago(subId,pagado){
-  await dbConfirmarPagoSub(subId,pagado);
-  pagosSubs=await dbCargarPagosSubs();
+  if(pagado){
+    // Solo guardar si el usuario confirmó que pagó
+    await dbConfirmarPagoSub(subId,true);
+    pagosSubs=await dbCargarPagosSubs();
+  }
+  // Si apretó "Todavía no", solo re-renderizar sin guardar nada
   renderAll();
 }
 
