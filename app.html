@@ -508,6 +508,17 @@
   </div>
 </div>
 
+<!-- Modal detalle sub pagada -->
+<div class="modal-overlay" id="modal-sub-pagada">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">🔄 Suscripción pagada</div>
+    <div id="modal-sub-pagada-body"></div>
+    <button class="btn-danger" id="btn-deshacer-pago" style="margin-top:8px">↩ Deshacer pago</button>
+    <button class="btn-secondary" onclick="closeModals()">Cerrar</button>
+  </div>
+</div>
+
 <!-- Modal recordatorio ingresos -->
 <div class="modal-overlay" id="modal-recordatorio">
   <div class="modal">
@@ -921,6 +932,49 @@ function abrirModalCorrecto(){
   else openModalGasto();
 }
 
+function openModalSubPagada(subId){
+  const sub=subs.find(s=>s.id===subId);
+  if(!sub)return;
+  const hoy=new Date();
+  const mes=hoy.getMonth()+1;
+  const anio=hoy.getFullYear();
+  const pago=pagosSubs.find(p=>p.sub_id===subId&&p.mes===mes&&p.anio===anio&&p.pagado===true);
+  const t=getTarjeta(sub.pago);
+  const c=getCat(sub.cat,'sub');
+  const fechaPago=pago?.fecha_pago?new Date(pago.fecha_pago+'T00:00:00').toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long'}):'-';
+  document.getElementById('modal-sub-pagada-body').innerHTML=`
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;background:var(--card);padding:12px;border-radius:12px;border:1px solid var(--border)">
+      <div style="width:44px;height:44px;border-radius:13px;background:${c.color}22;display:flex;align-items:center;justify-content:center;font-size:22px">${c.icono}</div>
+      <div><div style="font-size:16px;font-weight:800">${sub.nombre}</div><div style="font-size:12px;color:var(--muted);margin-top:2px">${c.nombre}</div></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;font-size:14px;padding:10px 12px;background:var(--card);border-radius:10px;border:1px solid var(--border)">
+        <span style="color:var(--muted)">Monto</span><span style="font-weight:700">${fmt(sub.monto,sub.moneda)}${dolarBlue>0&&sub.moneda==='USD'?`<br><span style="font-size:11px;color:var(--muted)">≈ ${fmt(sub.monto*dolarBlue)}</span>`:''}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:14px;padding:10px 12px;background:var(--card);border-radius:10px;border:1px solid var(--border)">
+        <span style="color:var(--muted)">Medio de pago</span><span style="font-weight:700;color:${t.color}">${t.icono} ${t.nombre}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:14px;padding:10px 12px;background:var(--card);border-radius:10px;border:1px solid var(--border)">
+        <span style="color:var(--muted)">Día de débito</span><span style="font-weight:700">Día ${sub.dia} de cada mes</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:14px;padding:10px 12px;background:var(--success-dim);border-radius:10px;border:1px solid rgba(0,196,140,0.2)">
+        <span style="color:var(--muted)">Confirmado como pagado</span><span style="font-weight:700;color:var(--success)">📅 ${fechaPago}</span>
+      </div>
+    </div>`;
+  const btnDeshacer=document.getElementById('btn-deshacer-pago');
+  btnDeshacer.onclick=async()=>{
+    btnDeshacer.disabled=true;btnDeshacer.textContent='Deshaciendo...';
+    // Eliminar el registro de pago
+    const hoy2=new Date();
+    await sb.from('suscripciones_pagos').delete()
+      .eq('user_id',currentUser.id).eq('sub_id',subId)
+      .eq('mes',hoy2.getMonth()+1).eq('anio',hoy2.getFullYear());
+    pagosSubs=await dbCargarPagosSubs();
+    closeModals();renderAll();
+  };
+  openModalWithHistory('modal-sub-pagada');
+}
+
 function openModalGasto(id=null){
   const titulo=document.getElementById('modal-gasto-title');
   const btnDel=document.getElementById('btn-del-gasto');
@@ -937,7 +991,18 @@ function openModalGasto(id=null){
     if(g.cuotas){document.getElementById('g-is-cuota').checked=true;document.getElementById('g-cuotas-cant').value=g.cuotas;}
     else{document.getElementById('g-is-cuota').checked=false;document.getElementById('g-cuotas-cant').value='';}
     toggleCuotas();titulo.innerText='Editar gasto';btnSave.innerText='Guardar cambios';btnDel.style.display='block';
+    // Mostrar info adicional
+    let infoEl=document.getElementById('g-info-extra');
+    if(!infoEl){infoEl=document.createElement('div');infoEl.id='g-info-extra';infoEl.style.cssText='margin-bottom:14px;padding:10px 12px;background:var(--card);border-radius:10px;border:1px solid var(--border)';document.getElementById('modal-gasto').querySelector('.modal').insertBefore(infoEl,document.getElementById('modal-gasto').querySelector('.field'));}
+    const t=getTarjeta(g.pago);const c=getCat(g.cat,'gasto');
+    const fechaFmt=new Date(g.fecha+'T00:00:00').toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+    const cuotaInfo=g.cuotas?`<span style="margin-left:8px;font-size:11px;padding:2px 8px;border-radius:99px;background:var(--accent-dim);color:var(--accent);font-weight:700">C${calcularCuotaActual(g.fecha,cierres[g.pago]?.dia||31)}/${g.cuotas}</span>`:'';
+    infoEl.innerHTML=`<div style="font-size:12px;color:var(--muted);margin-bottom:4px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">Detalle</div>
+      <div style="font-size:13px;margin-bottom:3px">📅 ${fechaFmt}</div>
+      <div style="font-size:13px;margin-bottom:3px"><span style="color:${t.color}">${t.icono} ${t.nombre}</span> · ${c.icono} ${c.nombre} ${cuotaInfo}</div>
+      <div style="font-size:13px;font-weight:700;color:var(--text)">💰 ${fmt(g.montoOriginal||g.monto,g.moneda)}${g.cuotas?` (${fmt(g.monto,g.moneda)}/cuota)`:''}</div>`;
   }else{
+    const infoEl=document.getElementById('g-info-extra');if(infoEl)infoEl.remove();
     document.getElementById('g-id').value='';document.getElementById('g-monto').value='';
     document.getElementById('g-desc').value='';document.getElementById('g-fecha').value=today();
     document.getElementById('g-moneda').value='ARS';document.getElementById('g-es-fijo').checked=false;
@@ -1691,7 +1756,7 @@ function renderFeed(){
     } else if(e.tipo==='sub_pagada'){
       const c=getCat(e.cat,'sub');
       const t=getTarjeta(e.pago);
-      htmlStr+=`<div class="feed-item">
+      htmlStr+=`<div class="feed-item" onclick="openModalSubPagada(${e.id})">
         <div class="ico" style="background:${c.color}22">${c.icono}</div>
         <div class="info"><div class="desc">${e.desc}</div><div class="meta">🔄 Suscripción · <span style="color:${t.color}">${t.icono} ${t.nombre}</span></div></div>
         <div class="amount neg">-${fmt(e.monto,e.moneda)}</div>
