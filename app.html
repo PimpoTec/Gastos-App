@@ -422,6 +422,7 @@
       <div style="margin-bottom:20px">
         <p class="section-title">🔔 Notificaciones</p>
         <p style="font-size:13px;color:var(--muted);margin-bottom:12px;line-height:1.5">Activá alertas para tus tarjetas y suscripciones.</p>
+        <button class="btn-secondary" style="margin-bottom:12px;border-color:var(--accent);color:var(--accent)" onclick="testNotificacion()">🔔 Probar notificación ahora</button>
         <div id="notif-config-list"></div>
       </div>
       <div style="margin-bottom:20px">
@@ -1794,6 +1795,24 @@ function renderBalance(){
   }).join('');
 }
 
+async function testNotificacion(){
+  const btn=document.querySelector('[onclick="testNotificacion()"]');
+  if(btn){btn.disabled=true;btn.textContent='Enviando...';}
+  try{
+    const res=await fetch('https://rujgpkiuhofndbmcntuj.supabase.co/functions/v1/notificaciones-push',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':`Bearer ${(await sb.auth.getSession()).data.session?.access_token}`},
+      body:JSON.stringify({test:true})
+    });
+    const data=await res.json();
+    if(btn){btn.disabled=false;btn.textContent=data.enviados>0?'✅ Notificación enviada':'⚠ Sin dispositivos registrados';}
+    setTimeout(()=>{if(btn)btn.textContent='🔔 Probar notificación ahora';},3000);
+  }catch(e){
+    if(btn){btn.disabled=false;btn.textContent='❌ Error al enviar';}
+    setTimeout(()=>{if(btn)btn.textContent='🔔 Probar notificación ahora';},3000);
+  }
+}
+
 function renderNotifConfig(){
   const container = document.getElementById('notif-config-list');
   if(!container) return;
@@ -1814,17 +1833,18 @@ function renderNotifConfig(){
             <option value="3"  ${!esCustom&&cfg.dias===3?'selected':''}>3 días antes</option>
             <option value="custom" ${esCustom?'selected':''}>Personalizado</option>
           </select>
-          <div id="custom_${key}" style="display:${esCustom?'flex':'none'};gap:8px;align-items:center">
-            <input type="number" id="cDias_${key}" min="0" max="30" value="${cfg.diasCustom||defaultDias}"
-              placeholder="Días" ${!cfg.activo?'disabled':''}
-              onchange="updateNotifConfig('${key}')"
-              style="width:70px;padding:5px 8px;font-size:13px;background:var(--card-2);border:1px solid var(--border-2);border-radius:8px;color:var(--text)">
-            <span style="font-size:12px;color:var(--muted)">días antes a las</span>
-            <input type="number" id="cHora_${key}" min="0" max="23" value="${cfg.hora??9}"
-              placeholder="Hora" ${!cfg.activo?'disabled':''}
-              onchange="updateNotifConfig('${key}')"
-              style="width:60px;padding:5px 8px;font-size:13px;background:var(--card-2);border:1px solid var(--border-2);border-radius:8px;color:var(--text)">
-            <span style="font-size:12px;color:var(--muted)">hs</span>
+          <div id="custom_${key}" style="display:${esCustom?'flex':'none'};flex-direction:column;gap:8px">
+            <div style="display:flex;gap:8px;align-items:center">
+              <input type="number" id="cDias_${key}" min="0" max="30" value="${cfg.diasCustom||defaultDias}"
+                placeholder="Días" ${!cfg.activo?'disabled':''}
+                style="width:70px;padding:5px 8px;font-size:13px;background:var(--card-2);border:1px solid var(--border-2);border-radius:8px;color:var(--text)">
+              <span style="font-size:12px;color:var(--muted)">días antes a las</span>
+              <input type="number" id="cHora_${key}" min="0" max="23" value="${cfg.hora??9}"
+                placeholder="Hora" ${!cfg.activo?'disabled':''}
+                style="width:60px;padding:5px 8px;font-size:13px;background:var(--card-2);border:1px solid var(--border-2);border-radius:8px;color:var(--text)">
+              <span style="font-size:12px;color:var(--muted)">hs</span>
+            </div>
+            <button onclick="updateNotifConfig('${key}')" style="padding:7px 14px;background:var(--accent);color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;align-self:flex-start">✓ Confirmar</button>
           </div>
         </div>
       </div>
