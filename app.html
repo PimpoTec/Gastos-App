@@ -1834,17 +1834,21 @@ function renderNotifConfig(){
             <option value="custom" ${esCustom?'selected':''}>Personalizado</option>
           </select>
           <div id="custom_${key}" style="display:${esCustom?'flex':'none'};flex-direction:column;gap:8px">
-            <div style="display:flex;gap:8px;align-items:center">
-              <input type="number" id="cDias_${key}" min="0" max="30" value="${cfg.diasCustom||defaultDias}"
-                placeholder="Días" ${!cfg.activo?'disabled':''}
-                style="width:70px;padding:5px 8px;font-size:13px;background:var(--card-2);border:1px solid var(--border-2);border-radius:8px;color:var(--text)">
-              <span style="font-size:12px;color:var(--muted)">días antes a las</span>
-              <input type="number" id="cHora_${key}" min="0" max="23" value="${cfg.hora??9}"
-                placeholder="Hora" ${!cfg.activo?'disabled':''}
-                style="width:60px;padding:5px 8px;font-size:13px;background:var(--card-2);border:1px solid var(--border-2);border-radius:8px;color:var(--text)">
-              <span style="font-size:12px;color:var(--muted)">hs</span>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <div style="display:flex;flex-direction:column;gap:4px">
+                <span style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.06em">Fecha</span>
+                <input type="date" id="cFecha_${key}" value="${cfg.fecha||''}"
+                  ${!cfg.activo?'disabled':''}
+                  style="padding:6px 10px;font-size:13px;background:var(--card-2);border:1px solid var(--border-2);border-radius:8px;color:var(--text);font-family:inherit">
+              </div>
+              <div style="display:flex;flex-direction:column;gap:4px">
+                <span style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.06em">Hora</span>
+                <input type="number" id="cHora_${key}" min="0" max="23" value="${cfg.hora??9}"
+                  placeholder="Hora" ${!cfg.activo?'disabled':''}
+                  style="width:65px;padding:6px 8px;font-size:13px;background:var(--card-2);border:1px solid var(--border-2);border-radius:8px;color:var(--text)">
+              </div>
             </div>
-            <button onclick="updateNotifConfig('${key}')" style="padding:7px 14px;background:var(--accent);color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;align-self:flex-start">✓ Confirmar</button>
+            <button id="btn_confirm_${key}" onclick="updateNotifConfig('${key}')" style="padding:8px 16px;background:var(--accent);color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;align-self:flex-start;transition:all .2s">✓ Confirmar</button>
           </div>
         </div>
       </div>
@@ -1897,17 +1901,23 @@ async function updateNotifConfig(key){
   const tipoSel = document.getElementById(`tipo_${key}`);
   if(!tipoSel) return;
   const esCustom = tipoSel.value === 'custom';
-  const diasInput = document.getElementById(`cDias_${key}`);
+  const fechaInput = document.getElementById(`cFecha_${key}`);
   const horaInput = document.getElementById(`cHora_${key}`);
   const cfg = notifConfig[key] || {};
   notifConfig[key] = {
     ...cfg,
     personalizado: esCustom,
-    dias: esCustom ? (parseInt(diasInput?.value)||1) : parseInt(tipoSel.value),
-    diasCustom: esCustom ? (parseInt(diasInput?.value)||1) : cfg.diasCustom,
+    fecha: esCustom ? (fechaInput?.value||null) : null,
     hora: parseInt(horaInput?.value ?? cfg.hora ?? 9),
   };
   await dbGuardarNotifConfig(notifConfig);
+  // Feedback visual en el botón
+  const btn=document.getElementById(`btn_confirm_${key}`);
+  if(btn){
+    btn.textContent='✅ Guardado';
+    btn.style.background='var(--success)';
+    setTimeout(()=>{btn.textContent='✓ Confirmar';btn.style.background='var(--accent)';},2000);
+  }
 }
 
 function renderPerfil(){
