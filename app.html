@@ -1200,8 +1200,11 @@ function renderCatChips(cid,list,sel,ctx){
     :'<div style="font-size:13px;color:var(--muted)">Agregá categorías en Perfil</div>';
 }
 function selectCat(cid,id,ctx){
-  if(ctx==='gasto')selCatGasto=id;else selCatSub=id;
-  renderCatChips(cid,cats.filter(c=>c.tipo===(ctx==='gasto'?'gasto':'sub')),id,ctx);
+  if(ctx==='gasto')selCatGasto=id;
+  else if(ctx==='rapido')selCatRapido=id;
+  else selCatSub=id;
+  const tipo=(ctx==='sub')?'sub':'gasto';
+  renderCatChips(cid,cats.filter(c=>c.tipo===tipo),id,ctx);
 }
 
 // ── CRUD ─────────────────────────────────────────────
