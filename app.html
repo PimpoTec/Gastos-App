@@ -1356,20 +1356,26 @@ function updateHero(){
   const hoy2=new Date();
   const mesNum=hoy2.getMonth()+1;
   const anioNum=hoy2.getFullYear();
+  // Para "Salida de bolsillo": subs NO pagadas con TC
   const subsConfirmadas=subs.filter(s=>{
-    if(tarjetasCredito.has(String(s.pago)))return false; // TC no descuenta del bolsillo
+    if(tarjetasCredito.has(String(s.pago)))return false;
     const pago=pagosSubs.find(p=>p.sub_id===s.id&&p.mes===mesNum&&p.anio===anioNum);
     return pago?.pagado===true;
   });
-  const totalSubs=subsConfirmadas.reduce((a,s)=>{
+  const totalSubsBolsillo=subsConfirmadas.reduce((a,s)=>{
     if(s.moneda==='USD') return a+(dolarBlue>0?s.monto*dolarBlue:0);
     return a+s.monto;
   },0);
+  // Para mini-card "Suscripciones": TODAS las confirmadas este mes
+  const totalSubsDisplay=subs.filter(s=>{
+    const pago=pagosSubs.find(p=>p.sub_id===s.id&&p.mes===mesNum&&p.anio===anioNum);
+    return pago?.pagado===true&&s.moneda!=='USD';
+  }).reduce((a,s)=>a+s.monto,0);
   // Convertir gastos USD al blue para sumar al total ARS
   const totalARS=mesG.reduce((a,g)=>{
     if(g.moneda==='USD') return a+(dolarBlue>0?g.monto*dolarBlue:0);
     return a+g.monto;
-  },0)+totalSubs;
+  },0)+totalSubsBolsillo;
 
   // USD
   const mesUSD=gastos.filter(g=>{if(g.moneda!=='USD')return false;const d=new Date(g.fecha+'T00:00:00');return d.getMonth()===hoy.getMonth()&&d.getFullYear()===hoy.getFullYear();});
@@ -1386,7 +1392,8 @@ function updateHero(){
   document.getElementById('hero-total').textContent=fmt(totalARS);
   document.getElementById('hero-sub').textContent=new Date().toLocaleDateString('es-AR',{month:'long',year:'numeric'});
   document.getElementById('hero-tarjetas').textContent=fmt(totalTarjetas);
-  document.getElementById('hero-subs').textContent=fmt(totalSubs);
+  const heroSubsEl=document.getElementById('hero-subs');
+  if(heroSubsEl) heroSubsEl.textContent=fmt(totalSubsDisplay);
   const heroUsdEl=document.getElementById('hero-usd');
   if(heroUsdEl){
     heroUsdEl.innerHTML=dolarBlue>0&&totalUSD>0
