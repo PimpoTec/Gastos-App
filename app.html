@@ -1366,11 +1366,14 @@ function updateHero(){
     if(s.moneda==='USD') return a+(dolarBlue>0?s.monto*dolarBlue:0);
     return a+s.monto;
   },0);
-  // Para mini-card "Suscripciones": TODAS las confirmadas este mes
+  // Para mini-card "Suscripciones": TODAS las confirmadas este mes incluyendo USD
   const totalSubsDisplay=subs.filter(s=>{
     const pago=pagosSubs.find(p=>p.sub_id===s.id&&p.mes===mesNum&&p.anio===anioNum);
-    return pago?.pagado===true&&s.moneda!=='USD';
-  }).reduce((a,s)=>a+s.monto,0);
+    return pago?.pagado===true;
+  }).reduce((a,s)=>{
+    if(s.moneda==='USD') return a+(dolarBlue>0?s.monto*dolarBlue:0);
+    return a+s.monto;
+  },0);
   // Convertir gastos USD al blue para sumar al total ARS
   const totalARS=mesG.reduce((a,g)=>{
     if(g.moneda==='USD') return a+(dolarBlue>0?g.monto*dolarBlue:0);
