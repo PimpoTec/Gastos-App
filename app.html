@@ -2043,9 +2043,9 @@ function renderNotifConfig(){
               </div>
               <div style="display:flex;flex-direction:column;gap:4px">
                 <span style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.06em">Hora</span>
-                <input type="number" id="cHora_${key}" min="0" max="23" value="${cfg.hora??9}"
-                  placeholder="Hora" ${!cfg.activo?'disabled':''}
-                  style="width:65px;padding:6px 8px;font-size:13px;background:var(--card-2);border:1px solid var(--border-2);border-radius:8px;color:var(--text)">
+                <input type="time" id="cHora_${key}" value="${String(cfg.hora??9).padStart(2,'0')}:${String(cfg.minuto??0).padStart(2,'0')}"
+                  ${!cfg.activo?'disabled':''}
+                  style="width:90px;padding:6px 8px;font-size:13px;background:var(--card-2);border:1px solid var(--border-2);border-radius:8px;color:var(--text);font-family:inherit">
               </div>
             </div>
             <button id="btn_confirm_${key}" onclick="updateNotifConfig('${key}')" style="padding:8px 16px;background:var(--accent);color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;align-self:flex-start;transition:all .2s">✓ Confirmar</button>
@@ -2104,11 +2104,16 @@ async function updateNotifConfig(key){
   const fechaInput = document.getElementById(`cFecha_${key}`);
   const horaInput = document.getElementById(`cHora_${key}`);
   const cfg = notifConfig[key] || {};
+  let hora = cfg.hora ?? 9, minuto = cfg.minuto ?? 0;
+  if(horaInput?.value){
+    const [h,m] = horaInput.value.split(':');
+    hora = parseInt(h); minuto = parseInt(m);
+  }
   notifConfig[key] = {
     ...cfg,
     personalizado: esCustom,
     fecha: esCustom ? (fechaInput?.value||null) : null,
-    hora: parseInt(horaInput?.value ?? cfg.hora ?? 9),
+    hora, minuto,
   };
   await dbGuardarNotifConfig(notifConfig);
   // Feedback visual en el botón
