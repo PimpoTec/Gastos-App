@@ -1346,9 +1346,8 @@ function updateHero(){
   const hoy=new Date();
   const tarjetasCredito=new Set(tarjetas.filter(t=>t.esTarjeta).map(t=>String(t.id)));
 
-  // Solo gastos que salen del bolsillo ahora (sin tarjeta de crédito, sin USD)
+  // Solo gastos que salen del bolsillo ahora (sin tarjeta de crédito)
   const mesG=gastos.filter(g=>{
-    if(g.moneda==='USD')return false;
     if(tarjetasCredito.has(String(g.pago)))return false; // excluir TC
     const d=new Date(g.fecha+'T00:00:00');
     return d.getMonth()===hoy.getMonth()&&d.getFullYear()===hoy.getFullYear();
@@ -1358,13 +1357,19 @@ function updateHero(){
   const mesNum=hoy2.getMonth()+1;
   const anioNum=hoy2.getFullYear();
   const subsConfirmadas=subs.filter(s=>{
-    if(s.moneda==='USD')return false;
     if(tarjetasCredito.has(String(s.pago)))return false; // TC no descuenta del bolsillo
     const pago=pagosSubs.find(p=>p.sub_id===s.id&&p.mes===mesNum&&p.anio===anioNum);
     return pago?.pagado===true;
   });
-  const totalSubs=subsConfirmadas.reduce((a,s)=>a+s.monto,0);
-  const totalARS=mesG.reduce((a,g)=>a+g.monto,0)+totalSubs;
+  const totalSubs=subsConfirmadas.reduce((a,s)=>{
+    if(s.moneda==='USD') return a+(dolarBlue>0?s.monto*dolarBlue:0);
+    return a+s.monto;
+  },0);
+  // Convertir gastos USD al blue para sumar al total ARS
+  const totalARS=mesG.reduce((a,g)=>{
+    if(g.moneda==='USD') return a+(dolarBlue>0?g.monto*dolarBlue:0);
+    return a+g.monto;
+  },0)+totalSubs;
 
   // USD
   const mesUSD=gastos.filter(g=>{if(g.moneda!=='USD')return false;const d=new Date(g.fecha+'T00:00:00');return d.getMonth()===hoy.getMonth()&&d.getFullYear()===hoy.getFullYear();});
@@ -1927,7 +1932,6 @@ function renderBalance(){
   const totalIngresos=mesI.reduce((a,i)=>a+i.monto,0);
   const tarjetasCredito=new Set(tarjetas.filter(t=>t.esTarjeta).map(t=>String(t.id)));
   const mesGSinTC=gastos.filter(g=>{
-    if(g.moneda==='USD')return false;
     if(tarjetasCredito.has(String(g.pago)))return false;
     const d=new Date(g.fecha+'T00:00:00');
     return d.getMonth()===mesRef.getMonth()&&d.getFullYear()===mesRef.getFullYear();
@@ -1935,12 +1939,17 @@ function renderBalance(){
   const diaRef=mesOffset===0?hoy.getDate():new Date(mesRef.getFullYear(),mesRef.getMonth()+1,0).getDate();
   const mesNum2=mesRef.getMonth()+1;const anioNum2=mesRef.getFullYear();
   const totalSubs=subs.filter(s=>{
-    if(s.moneda==='USD')return false;
-    if(tarjetasCredito.has(String(s.pago)))return false; // TC no descuenta del balance
+    if(tarjetasCredito.has(String(s.pago)))return false;
     const pago=pagosSubs.find(p=>p.sub_id===s.id&&p.mes===mesNum2&&p.anio===anioNum2);
     return pago?.pagado===true;
-  }).reduce((a,s)=>a+s.monto,0);
-  const totalGastos=mesGSinTC.reduce((a,g)=>a+g.monto,0)+totalSubs;
+  }).reduce((a,s)=>{
+    if(s.moneda==='USD') return a+(dolarBlue>0?s.monto*dolarBlue:0);
+    return a+s.monto;
+  },0);
+  const totalGastos=mesGSinTC.reduce((a,g)=>{
+    if(g.moneda==='USD') return a+(dolarBlue>0?g.monto*dolarBlue:0);
+    return a+g.monto;
+  },0)+totalSubs;
   const balance=totalIngresos-totalGastos;
   const hero=document.getElementById('balance-hero');
   hero.className='balance-hero '+(balance>0?'positivo':balance<0?'negativo':'neutro');
