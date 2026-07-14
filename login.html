@@ -48,7 +48,7 @@
 <body>
 <div class="bg-blobs"><div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div></div>
 <div class="wrap">
-  <div class="logo">💸</div>
+  <div class="logo"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--on-accent)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 21 12 12 21 3 12 Z"/><path d="M8 13l3-3 2 2 4-4"/></svg></div>
   <div class="title">Mis <span>Gastos</span></div>
   <div class="subtitle">Controlá tus finanzas</div>
   <div class="card">
@@ -104,7 +104,7 @@
     setLoading('btn-register',true);
     const{error}=await sb.auth.signUp({email,password:pass});
     if(error){setMsg(trad(error.message));setLoading('btn-register',false);return;}
-    setMsg('✅ Cuenta creada. Ya podés ingresar.','ok');
+    setMsg('Cuenta creada. Ya podés ingresar.','ok');
     setLoading('btn-register',false);
     setTimeout(()=>setTab('login'),2000);
   }
