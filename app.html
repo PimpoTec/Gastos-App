@@ -1803,7 +1803,7 @@ function renderCuotas(){
   const filtradas=tSel?activas.filter(g=>g.pago==tSel.id):activas;
   if(!filtradas.length){lista.innerHTML=`<div class="empty"><div class="ico">${ic('check-circle')}</div><p style="font-weight:600;font-size:14px;margin-bottom:4px">Sin cuotas activas${tSel?` en ${tSel.nombre}`:''}</p><p style="font-size:13px">Las compras en cuotas aparecen acá.</p></div>`;return;}
   lista.innerHTML=filtradas.map(g=>`<div class="feed-item" onclick="openModalGasto(${g.id})">
-    <div class="ico" style="background:${getCat(g.cat,'gasto').color}22">${getCat(g.cat,'gasto').icono}</div>
+    <div class="ico" style="background:${getCat(g.cat,'gasto').color}22">${ic(getCat(g.cat,'gasto').icono)}</div>
     <div class="info">
       <div class="desc">${g.desc}</div>
       <div class="meta">${new Date(g.fecha+'T00:00:00').toLocaleDateString('es-AR',{month:'short',year:'numeric'})}</div>
