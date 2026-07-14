@@ -22,6 +22,7 @@
       --warning:#f5a623;--warning-dim:rgba(245,166,35,0.1);
       --success:#00c48c;--success-dim:rgba(0,196,140,0.1);
       --gold:#f5c842;
+      --purple:#9775fa;--purple-dim:rgba(151,117,250,0.12);
       --radius:18px;--radius-sm:13px;--radius-xs:10px;
       --bottom-nav:64px;--safe-bottom:env(safe-area-inset-bottom,0px);
       --shadow-sm:0 2px 12px rgba(0,0,0,0.35);
@@ -154,6 +155,16 @@
     .ingreso-item .meta{font-size:11.5px;color:var(--muted);margin-top:3px}
     .ingreso-item .amount{font-size:15px;font-weight:800;color:var(--success);letter-spacing:-.3px}
 
+    /* ── Ahorros ── */
+    .ahorro-item{display:flex;align-items:center;gap:12px;background:var(--purple-dim);border-radius:var(--radius-sm);padding:13px 14px;margin-bottom:6px;cursor:pointer;border:1px solid rgba(151,117,250,0.18);transition:background .12s}
+    .ahorro-item:active{background:rgba(151,117,250,0.2)}
+    .ahorro-item .ico{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;background:rgba(151,117,250,0.18)}
+    .ahorro-item .info{flex:1;min-width:0}
+    .ahorro-item .desc{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .ahorro-item .meta{font-size:11.5px;color:var(--muted);margin-top:3px}
+    .ahorro-item .amount{font-size:15px;font-weight:800;color:var(--purple);letter-spacing:-.3px}
+    .ahorro-item.retiro .amount{color:var(--danger)}
+
     /* ── Gasto item ── */
     .gasto-item{display:flex;align-items:center;gap:12px;background:var(--card);border-radius:var(--radius-sm);padding:13px 14px;margin-bottom:6px;cursor:pointer;border:1px solid var(--border);transition:background .12s}
     .gasto-item:active{background:var(--card-2)}
@@ -175,6 +186,7 @@
     .balance-hero.positivo{background:linear-gradient(135deg,#003d2d 0%,#006644 100%);border:1px solid rgba(0,196,140,0.2)}
     .balance-hero.negativo{background:linear-gradient(135deg,#3d0011 0%,#7a0022 100%);border:1px solid rgba(242,61,79,0.2)}
     .balance-hero.neutro{background:linear-gradient(135deg,#001a36 0%,#003366 100%);border:1px solid rgba(0,158,227,0.2)}
+    .balance-hero.ahorro{background:linear-gradient(135deg,#241a3d 0%,#4a2f80 100%);border:1px solid rgba(151,117,250,0.25)}
     .balance-hero .lbl{font-size:11px;color:rgba(255,255,255,0.55);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px;font-weight:600}
     .balance-hero .val{font-size:38px;font-weight:800;color:white;letter-spacing:-1.5px;position:relative;z-index:1}
     .balance-hero .sub{font-size:12px;color:rgba(255,255,255,0.55);margin-top:5px;position:relative;z-index:1}
@@ -392,6 +404,14 @@
       <div id="balance-cats" style="margin-bottom:20px"></div>
       <div class="section-title">Ingresos del mes <button class="btn-cfg" onclick="openModalIngreso()">+ Agregar</button></div>
       <div id="i-lista"></div>
+
+      <div class="section-title" style="margin-top:20px">🐷 Fondo de ahorro <button class="btn-cfg" onclick="openModalAhorro()">+ Movimiento</button></div>
+      <div class="balance-hero ahorro" id="ahorro-hero" style="margin-bottom:16px">
+        <div class="lbl">💰 Total ahorrado</div>
+        <div class="val" id="ahorro-val">$0</div>
+        <div class="sub">No forma parte de tu balance del mes</div>
+      </div>
+      <div id="ahorro-lista"></div>
     </div>
 
     <!-- PERFIL -->
@@ -608,6 +628,28 @@
   </div>
 </div>
 
+<!-- Modal Ahorro -->
+<div class="modal-overlay" id="modal-ahorro">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="modal-ahorro-title">Nuevo movimiento</div>
+    <input type="hidden" id="a-id">
+    <div class="field">
+      <label>Tipo</label>
+      <div class="cat-scroll" id="a-tipo-chips"></div>
+    </div>
+    <div class="field"><label>Monto</label>
+      <div class="amount-wrap">
+        <input type="number" id="a-monto" class="amount-input" placeholder="0" inputmode="decimal">
+      </div>
+    </div>
+    <div class="field"><label>Descripción</label><input type="text" id="a-desc" placeholder="Ej: Aporte mensual, retiro para viaje..." maxlength="60"></div>
+    <div class="field"><label>Fecha</label><input type="date" id="a-fecha"></div>
+    <button class="btn-submit btn-success" id="btn-save-ahorro" onclick="submitAhorro()">Guardar movimiento</button>
+    <button class="btn-submit btn-danger" id="btn-del-ahorro" style="display:none" onclick="eliminarAhorroActual()">Eliminar</button>
+  </div>
+</div>
+
 <!-- Modal Cierres -->
 <div class="modal-overlay" id="modal-cierres">
   <div class="modal">
@@ -781,6 +823,13 @@ async function dbCargarIngresos(){
 }
 async function dbUpsertIngreso(i){await sb.from('ingresos').upsert({id:i.id,user_id:currentUser.id,monto:i.monto,descripcion:i.desc,cat:i.cat,fecha:i.fecha,moneda:i.moneda||'ARS'});}
 async function dbDeleteIngreso(id){await sb.from('ingresos').delete().eq('id',id).eq('user_id',currentUser.id);}
+async function dbCargarAhorros(){
+  const{data,error}=await sb.from('ahorros_movimientos').select('*').eq('user_id',currentUser.id).order('fecha',{ascending:false});
+  if(error){console.error('Error cargando ahorros:',error);return[];}
+  return data.map(a=>({id:a.id,monto:parseFloat(a.monto),tipo:a.tipo||'aporte',desc:a.descripcion||'',fecha:a.fecha||today()}));
+}
+async function dbUpsertAhorro(a){await sb.from('ahorros_movimientos').upsert({id:a.id,user_id:currentUser.id,monto:a.monto,tipo:a.tipo,descripcion:a.desc,fecha:a.fecha});}
+async function dbDeleteAhorro(id){await sb.from('ahorros_movimientos').delete().eq('id',id).eq('user_id',currentUser.id);}
 async function dbCargarConfig(){
   const{data}=await sb.from('config').select('cierres, notif_config, dolar_blue, dolar_updated, presupuesto_mensual').eq('user_id',currentUser.id).maybeSingle();
   return {
@@ -843,10 +892,11 @@ async function dbUpsertCat(c){await sb.from('categorias').upsert({id:c.id,user_i
 async function dbDeleteCat(id){await sb.from('categorias').delete().eq('id',id).eq('user_id',currentUser.id);}
 
 // ── Estado ───────────────────────────────────────────
-let gastos=[],subs=[],ingresos=[],pagosSubs=[],cierres={},notifConfig={},tarjetas=[],cats=[];
+let gastos=[],subs=[],ingresos=[],pagosSubs=[],cierres={},notifConfig={},tarjetas=[],cats=[],ahorros=[];
 let dolarBlue=0, presupuestoMensual=0, mesOffset=0; // mesOffset: 0=este mes, -1=mes anterior, -2=hace 2 meses
 let tabActual='gastos';
-let selPagoGasto=null,selCatGasto=null,selPagoSub=null,selCatSub=null,selCatIngreso='sueldo';
+let selPagoGasto=null,selCatGasto=null,selPagoSub=null,selCatSub=null,selCatIngreso='sueldo',selTipoAhorro='aporte';
+const TIPOS_AHORRO=[{id:'aporte',nombre:'Aporte',icono:'➕'},{id:'retiro',nombre:'Retiro',icono:'➖'}];
 let selEmojiGridT='💳',selColorGridT='#748ffc';
 let selEmojiGridC='📦',selColorGridC='#B4B2A9';
 let nombrePerfil=localStorage.getItem('nombre_perfil')||'';
@@ -914,7 +964,7 @@ function switchTab(tab){
   closeModals();
   ajustarLayout();
   if(tab==='perfil') renderPerfil();
-  if(tab==='balance') renderBalance();
+  if(tab==='balance'){renderBalance();renderAhorros();}
   if(tab==='cuotas') renderCuotasTabs();
 }
 
@@ -1073,6 +1123,31 @@ function openModalIngreso(id=null){
 function renderCatIngresoChips(){
   document.getElementById('i-cat-chips').innerHTML=CATS_INGRESO.map(c=>`
     <div class="cat-chip ${c.id===selCatIngreso?'selected':''}" onclick="selCatIngreso='${c.id}';renderCatIngresoChips()">${c.icono} ${c.nombre}</div>`).join('');
+}
+
+function openModalAhorro(id=null){
+  const titulo=document.getElementById('modal-ahorro-title');
+  const btnDel=document.getElementById('btn-del-ahorro');
+  const btnSave=document.getElementById('btn-save-ahorro');
+  if(id){
+    const a=ahorros.find(x=>x.id===id);
+    document.getElementById('a-id').value=id;document.getElementById('a-monto').value=a.monto;
+    document.getElementById('a-desc').value=a.desc;document.getElementById('a-fecha').value=a.fecha;
+    selTipoAhorro=a.tipo;
+    titulo.innerText='Editar movimiento';btnSave.innerText='Guardar cambios';btnDel.style.display='block';
+  }else{
+    document.getElementById('a-id').value='';document.getElementById('a-monto').value='';
+    document.getElementById('a-desc').value='';document.getElementById('a-fecha').value=today();
+    selTipoAhorro='aporte';
+    titulo.innerText='Nuevo movimiento';btnSave.innerText='Guardar movimiento';btnDel.style.display='none';
+  }
+  renderTipoAhorroChips();
+  openModalWithHistory('modal-ahorro');
+}
+
+function renderTipoAhorroChips(){
+  document.getElementById('a-tipo-chips').innerHTML=TIPOS_AHORRO.map(t=>`
+    <div class="cat-chip ${t.id===selTipoAhorro?'selected':''}" onclick="selTipoAhorro='${t.id}';renderTipoAhorroChips()">${t.icono} ${t.nombre}</div>`).join('');
 }
 
 function toggleCuotas(){document.getElementById('g-cuotas-detalles').style.display=document.getElementById('g-is-cuota').checked?'block':'none';}
@@ -1280,6 +1355,44 @@ async function eliminarIngresoActual(){
   const btn=document.getElementById('btn-del-ingreso');btn.disabled=true;btn.textContent='Eliminando...';
   await dbDeleteIngreso(parseInt(id));ingresos=ingresos.filter(i=>i.id!=id);
   btn.disabled=false;closeModals();renderAll();renderBalance();
+}
+async function submitAhorro(){
+  const aId=document.getElementById('a-id').value;
+  const monto=parseFloat(document.getElementById('a-monto').value);
+  const desc=document.getElementById('a-desc').value.trim();
+  const fecha=document.getElementById('a-fecha').value;
+  if(isNaN(monto)||monto<=0){err('a-monto');return;}
+  if(!desc){err('a-desc');return;}
+  if(!fecha){err('a-fecha');return;}
+  const btn=document.getElementById('btn-save-ahorro');btn.disabled=true;btn.textContent='Guardando...';
+  const newA={id:aId?parseInt(aId):Date.now(),monto,desc,tipo:selTipoAhorro,fecha};
+  await dbUpsertAhorro(newA);
+  if(aId)ahorros=ahorros.map(x=>x.id==aId?newA:x);else ahorros.unshift(newA);
+  btn.disabled=false;btn.textContent='Guardar movimiento';
+  closeModals();renderAhorros();
+}
+async function eliminarAhorroActual(){
+  const id=document.getElementById('a-id').value;if(!id)return;
+  const btn=document.getElementById('btn-del-ahorro');btn.disabled=true;btn.textContent='Eliminando...';
+  await dbDeleteAhorro(parseInt(id));ahorros=ahorros.filter(a=>a.id!=id);
+  btn.disabled=false;closeModals();renderAhorros();
+}
+function renderAhorros(){
+  const total=ahorros.reduce((a,m)=>a+(m.tipo==='retiro'?-m.monto:m.monto),0);
+  const valEl=document.getElementById('ahorro-val');if(valEl)valEl.textContent=fmt(total);
+  const hero=document.getElementById('ahorro-hero');
+  if(hero)hero.className='balance-hero ahorro'+(total<0?' negativo':'');
+  const lista=document.getElementById('ahorro-lista');
+  if(!lista)return;
+  if(!ahorros.length){
+    lista.innerHTML=`<div class="empty"><div class="ico">🐷</div><p style="font-weight:600;font-size:14px;margin-bottom:6px">Sin movimientos todavía</p><p style="font-size:13px">Empezá a guardar plata para tus metas, sin que se mezcle con el día a día.</p><button onclick="openModalAhorro()" style="margin-top:14px;padding:10px 20px;background:var(--purple);color:white;border:none;border-radius:99px;font-size:13px;font-weight:700;cursor:pointer">+ Agregar movimiento</button></div>`;
+    return;
+  }
+  lista.innerHTML=[...ahorros].sort((a,b)=>new Date(b.fecha)-new Date(a.fecha)).map(a=>{
+    const fl=new Date(a.fecha+'T00:00:00').toLocaleDateString('es-AR',{day:'numeric',month:'short'});
+    const esRetiro=a.tipo==='retiro';
+    return`<div class="ahorro-item ${esRetiro?'retiro':''}" onclick="openModalAhorro(${a.id})"><div class="ico">${esRetiro?'➖':'➕'}</div><div class="info"><div class="desc">${a.desc}</div><div class="meta">${fl}</div></div><div class="amount">${esRetiro?'-':'+'}${fmt(a.monto)}</div></div>`;
+  }).join('');
 }
 async function submitTarjeta(){
   const tId=document.getElementById('t-id').value;
@@ -2218,8 +2331,8 @@ async function initPushNotifications() {
     if(!session){window.location.href='login.html';return;}
     currentUser=session.user;
     showLoading('Cargando datos...');
-    [gastos,subs,ingresos,tarjetas,cats,pagosSubs]=await Promise.all([
-      dbCargarGastos(),dbCargarSubs(),dbCargarIngresos(),dbCargarTarjetas(),dbCargarCats(),dbCargarPagosSubs()
+    [gastos,subs,ingresos,tarjetas,cats,pagosSubs,ahorros]=await Promise.all([
+      dbCargarGastos(),dbCargarSubs(),dbCargarIngresos(),dbCargarTarjetas(),dbCargarCats(),dbCargarPagosSubs(),dbCargarAhorros()
     ]);
     const configData = await dbCargarConfig();
     cierres = configData.cierres;
