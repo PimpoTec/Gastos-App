@@ -314,6 +314,14 @@
     @keyframes spin{to{transform:rotate(360deg)}}
     #loading-msg{font-size:14px;color:var(--muted);font-weight:500}
 
+    /* ── Bloqueo por huella ── */
+    #lock-overlay{position:fixed;inset:0;background:var(--bg);z-index:1000;display:none;align-items:center;justify-content:center;flex-direction:column;gap:6px;padding:24px;text-align:center}
+    #lock-overlay .lock-ico{width:76px;height:76px;border-radius:50%;background:var(--accent-dim);border:1px solid rgba(190,198,224,0.25);display:flex;align-items:center;justify-content:center;margin-bottom:18px;cursor:pointer;transition:transform .15s}
+    #lock-overlay .lock-ico:active{transform:scale(0.93)}
+    #lock-overlay .lock-ico .icon{width:36px;height:36px;color:var(--accent)}
+    #lock-overlay h2{font-size:18px;font-weight:800;margin-bottom:6px}
+    #lock-overlay p{font-size:13px;color:var(--muted);max-width:280px;line-height:1.5;margin-bottom:22px}
+    #lock-overlay .lock-err{font-size:12.5px;color:var(--danger);margin-bottom:14px;min-height:16px}
   </style>
 </head>
 
@@ -381,11 +389,20 @@
 <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 5-3 8-7 9-4-1-7-4-7-9V6z"/></symbol>
 <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></symbol>
 <symbol id="i-leaf" viewBox="0 0 24 24"><path d="M5 19c-1-7 3-14 14-14 1 8-4 14-14 14z"/><line x1="5" y1="19" x2="13" y2="11"/></symbol>
+<symbol id="i-fingerprint" viewBox="0 0 24 24"><path d="M12 3c-4 0-7 2.5-7 6.5 0 2 .5 3.5 1 5"/><path d="M12 3c4 0 7 2.5 7 6.5 0 1.5-.2 2.7-.5 3.8"/><path d="M9 21c-1-2-2-4.5-2-7 0-3 2.2-5 5-5s5 2 5 5c0 .8-.1 1.6-.3 2.4"/><path d="M12 9c1.7 0 3 1.3 3 3 0 3.5-1 6-2 8"/><path d="M9.5 9.5c-1 1-1.5 2.3-1.5 3.7 0 2 .5 3.8 1.3 5.3"/></symbol>
 <symbol id="i-plus" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></symbol>
 <symbol id="i-minus" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/></symbol>
 </defs>
 </svg>
 <div id="loading-overlay"><div class="spinner"></div><div id="loading-msg">Iniciando...</div></div>
+
+<div id="lock-overlay">
+  <div class="lock-ico" id="lock-btn" onclick="intentarDesbloqueo()"><svg class="icon"><use href="#i-fingerprint"></use></svg></div>
+  <h2 id="lock-title">Desbloqueá con tu huella</h2>
+  <p id="lock-sub">Tocá el ícono para verificar tu identidad y entrar a Mis Gastos.</p>
+  <div class="lock-err" id="lock-err"></div>
+  <button class="btn-secondary" style="max-width:220px" onclick="cerrarSesionDesdeLock()">Cerrar sesión</button>
+</div>
 
 <div class="bg-blobs"><div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div></div>
 
@@ -534,6 +551,17 @@
           <div class="ico-box" style="background:var(--success-dim);color:var(--success)"><svg class="icon"><use href="#i-cash"></use></svg></div>
           <div style="flex:1"><div class="name">Dólar blue</div><div class="sub" id="perfil-dolar-val">Cargando...</div></div>
           <div class="arr"><svg class="icon icon-sm"><use href="#i-refresh"></use></svg></div>
+        </div>
+      </div>
+      <div style="margin-bottom:20px">
+        <p class="section-title">Seguridad</p>
+        <div class="config-item" style="cursor:default">
+          <div class="ico-box" style="background:var(--accent-dim);color:var(--accent)"><svg class="icon"><use href="#i-fingerprint"></use></svg></div>
+          <div style="flex:1"><div class="name">Pedir huella al entrar</div><div class="sub" id="perfil-huella-sub">Verificando compatibilidad...</div></div>
+          <label class="toggle">
+            <input type="checkbox" id="chk-huella" onchange="toggleBiometrico(this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
         </div>
       </div>
       <div style="margin-bottom:20px">
@@ -841,6 +869,119 @@ function logout(){openModalWithHistory('modal-logout');}
 async function confirmarLogout(){await sb.auth.signOut();window.location.href='login.html';}
 function checkBienvenida(){if(!tarjetas.length)openModalWithHistory('modal-bienvenida');}
 
+// ── Bloqueo por huella (WebAuthn) ────────────────────
+function huellaSoportada(){return !!(window.PublicKeyCredential && navigator.credentials);}
+function huellaCredKey(){return 'huella_cred_'+currentUser.id;}
+
+async function registrarHuella(){
+  const challenge=crypto.getRandomValues(new Uint8Array(32));
+  const userIdBytes=new TextEncoder().encode(currentUser.id);
+  const cred=await navigator.credentials.create({publicKey:{
+    challenge,
+    rp:{name:'Mis Gastos'},
+    user:{id:userIdBytes,name:currentUser.email||'usuario',displayName:nombrePerfil||'Usuario'},
+    pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],
+    authenticatorSelection:{authenticatorAttachment:'platform',userVerification:'required'},
+    timeout:60000,
+  }});
+  const credId=btoa(String.fromCharCode(...new Uint8Array(cred.rawId)));
+  localStorage.setItem(huellaCredKey(),credId);
+}
+
+async function verificarHuella(){
+  const credId=localStorage.getItem(huellaCredKey());
+  if(!credId){await registrarHuella();return;}
+  const challenge=crypto.getRandomValues(new Uint8Array(32));
+  const idBytes=Uint8Array.from(atob(credId),c=>c.charCodeAt(0));
+  await navigator.credentials.get({publicKey:{
+    challenge,
+    allowCredentials:[{id:idBytes,type:'public-key'}],
+    userVerification:'required',
+    timeout:60000,
+  }});
+}
+
+let resolverDesbloqueo=null;
+function mostrarLock(mode){
+  const overlay=document.getElementById('lock-overlay');
+  const title=document.getElementById('lock-title');
+  const sub=document.getElementById('lock-sub');
+  document.getElementById('lock-err').textContent='';
+  if(mode==='setup'){
+    title.textContent='Configurá tu huella en este dispositivo';
+    sub.textContent='Activaste el desbloqueo por huella. Configurala acá para poder entrar la próxima vez.';
+  }else{
+    title.textContent='Desbloqueá con tu huella';
+    sub.textContent='Tocá el ícono para verificar tu identidad y entrar a Mis Gastos.';
+  }
+  overlay.dataset.mode=mode;
+  overlay.style.display='flex';
+  hideLoading();
+}
+function ocultarLock(){document.getElementById('lock-overlay').style.display='none';}
+
+async function intentarDesbloqueo(){
+  const overlay=document.getElementById('lock-overlay');
+  const err=document.getElementById('lock-err');
+  const mode=overlay.dataset.mode;
+  const btn=document.getElementById('lock-btn');
+  err.textContent='';
+  btn.style.opacity='.5';
+  try{
+    if(mode==='setup')await registrarHuella();else await verificarHuella();
+    ocultarLock();
+    if(resolverDesbloqueo){const r=resolverDesbloqueo;resolverDesbloqueo=null;r();}
+  }catch(e){
+    console.error('Error biometría:',e);
+    err.textContent=mode==='setup'?'No se pudo configurar la huella en este dispositivo.':'No se pudo verificar. Intentá de nuevo.';
+  }finally{
+    btn.style.opacity='1';
+  }
+}
+
+async function cerrarSesionDesdeLock(){await sb.auth.signOut();window.location.href='login.html';}
+
+function esperarDesbloqueo(){
+  return new Promise(resolve=>{
+    resolverDesbloqueo=resolve;
+    mostrarLock(localStorage.getItem(huellaCredKey())?'verify':'setup');
+  });
+}
+
+async function toggleBiometrico(checked){
+  const chk=document.getElementById('chk-huella');
+  if(checked){
+    if(!huellaSoportada()){chk.checked=false;alert('Este dispositivo o navegador no soporta desbloqueo por huella.');return;}
+    try{
+      await registrarHuella();
+      await dbGuardarBiometrico(true);
+      renderHuellaUI();
+    }catch(e){
+      console.error('Error configurando huella:',e);
+      chk.checked=false;
+      alert('No se pudo configurar la huella. Probá de nuevo.');
+    }
+  }else{
+    localStorage.removeItem(huellaCredKey());
+    await dbGuardarBiometrico(false);
+    renderHuellaUI();
+  }
+}
+
+function renderHuellaUI(){
+  const chk=document.getElementById('chk-huella');
+  const sub=document.getElementById('perfil-huella-sub');
+  if(!chk||!sub)return;
+  if(!huellaSoportada()){
+    chk.checked=false;chk.disabled=true;
+    sub.textContent='No disponible en este dispositivo/navegador';
+    return;
+  }
+  chk.disabled=false;
+  chk.checked=biometricEnabled;
+  sub.textContent=biometricEnabled?'Activado en este dispositivo':'Agrega un candado extra al abrir la app';
+}
+
 // ── Sistema de íconos propio (reemplaza los emojis) ──
 function ic(key,cls=''){return `<svg class="icon${cls?' '+cls:''}"><use href="#i-${key||'circle'}"></use></svg>`;}
 const LEGACY_ICON_MAP={
@@ -941,14 +1082,23 @@ async function dbCargarAhorros(){
 async function dbUpsertAhorro(a){await sb.from('ahorros_movimientos').upsert({id:a.id,user_id:currentUser.id,monto:a.monto,tipo:a.tipo,descripcion:a.desc,fecha:a.fecha});}
 async function dbDeleteAhorro(id){await sb.from('ahorros_movimientos').delete().eq('id',id).eq('user_id',currentUser.id);}
 async function dbCargarConfig(){
-  const{data}=await sb.from('config').select('cierres, notif_config, dolar_blue, dolar_updated, presupuesto_mensual').eq('user_id',currentUser.id).maybeSingle();
+  const{data}=await sb.from('config').select('cierres, notif_config, dolar_blue, dolar_updated, presupuesto_mensual, biometric_enabled').eq('user_id',currentUser.id).maybeSingle();
   return {
     cierres: data?.cierres||{},
     notifConfig: data?.notif_config||{},
     dolarBlue: parseFloat(data?.dolar_blue)||0,
     dolarUpdated: data?.dolar_updated||null,
     presupuesto: parseFloat(data?.presupuesto_mensual)||0,
+    biometricEnabled: !!data?.biometric_enabled,
   };
+}
+async function dbGuardarBiometrico(enabled){
+  biometricEnabled=enabled;
+  const {error} = await sb.from('config').upsert({
+    user_id:currentUser.id,cierres,notif_config:notifConfig,dolar_blue:dolarBlue,
+    presupuesto_mensual:presupuestoMensual,biometric_enabled:enabled,updated_at:new Date().toISOString()
+  });
+  if(error) console.error('Error guardando biometric_enabled:', error);
 }
 async function dbGuardarConfig(c){
   cierres=c;
@@ -1004,6 +1154,7 @@ async function dbDeleteCat(id){await sb.from('categorias').delete().eq('id',id).
 // ── Estado ───────────────────────────────────────────
 let gastos=[],subs=[],ingresos=[],pagosSubs=[],cierres={},notifConfig={},tarjetas=[],cats=[],ahorros=[];
 let dolarBlue=0, presupuestoMensual=0, mesOffset=0; // mesOffset: 0=este mes, -1=mes anterior, -2=hace 2 meses
+let biometricEnabled=false;
 let tabActual='gastos';
 let selPagoGasto=null,selCatGasto=null,selPagoSub=null,selCatSub=null,selCatIngreso='sueldo',selTipoAhorro='aporte';
 const TIPOS_AHORRO=[{id:'aporte',nombre:'Aporte',icono:'plus'},{id:'retiro',nombre:'Retiro',icono:'minus'}];
@@ -2349,6 +2500,7 @@ function renderPerfil(){
   document.getElementById('perfil-nombre-display').textContent=nombre;
   document.getElementById('perfil-email').textContent=currentUser?.email||'';
   document.getElementById('n-nombre').value=nombrePerfil;
+  renderHuellaUI();
   renderNotifConfig();
   const pEl=document.getElementById('perfil-presupuesto-val');
   if(pEl) pEl.textContent=presupuestoMensual>0?`${fmt(presupuestoMensual)}/mes`:'Sin configurar';
@@ -2437,14 +2589,19 @@ async function initPushNotifications() {
     if(!session){window.location.href='login.html';return;}
     currentUser=session.user;
     showLoading('Cargando datos...');
-    [gastos,subs,ingresos,tarjetas,cats,pagosSubs,ahorros]=await Promise.all([
-      dbCargarGastos(),dbCargarSubs(),dbCargarIngresos(),dbCargarTarjetas(),dbCargarCats(),dbCargarPagosSubs(),dbCargarAhorros()
-    ]);
     const configData = await dbCargarConfig();
     cierres = configData.cierres;
     notifConfig = configData.notifConfig;
     dolarBlue = configData.dolarBlue;
     presupuestoMensual = configData.presupuesto;
+    biometricEnabled = configData.biometricEnabled;
+    if(biometricEnabled && huellaSoportada()){
+      await esperarDesbloqueo();
+      showLoading('Cargando datos...');
+    }
+    [gastos,subs,ingresos,tarjetas,cats,pagosSubs,ahorros]=await Promise.all([
+      dbCargarGastos(),dbCargarSubs(),dbCargarIngresos(),dbCargarTarjetas(),dbCargarCats(),dbCargarPagosSubs(),dbCargarAhorros()
+    ]);
     actualizarDolarSiNecesario(configData.dolarUpdated);
     hideLoading();
     switchTab('gastos');
