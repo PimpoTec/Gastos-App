@@ -1176,7 +1176,22 @@ function getTarjeta(id){return tarjetas.find(t=>t.id==id)||{nombre:'?',icono:'ca
 function getCat(id,tipo){return cats.find(c=>c.id==id&&c.tipo===tipo)||cats.find(c=>c.id==id)||{nombre:'?',icono:'box',color:'#B4B2A9'};}
 function getCatIngreso(id){return CATS_INGRESO.find(c=>c.id===id)||CATS_INGRESO[CATS_INGRESO.length-1];}
 
-function inicioPeriodo(d,dH=new Date()){const diaH=dH.getDate();if(diaH>d)return new Date(dH.getFullYear(),dH.getMonth(),d+1);const ms=new Date(dH.getFullYear(),dH.getMonth()-1,1);return new Date(ms.getFullYear(),ms.getMonth(),d+1);}
+function inicioPeriodoBase(d,dH){const diaH=dH.getDate();if(diaH>d)return new Date(dH.getFullYear(),dH.getMonth(),d+1);const ms=new Date(dH.getFullYear(),dH.getMonth()-1,1);return new Date(ms.getFullYear(),ms.getMonth(),d+1);}
+// cfg puede ser un número (día de cierre) o el objeto {dia,diaAnterior,cambiadoEl} guardado en cierres[tId].
+// Si el día de cierre cambió hace poco, evita "revivir" gastos que ya habían cerrado con el día anterior.
+function inicioPeriodo(cfg,dH=new Date()){
+  const d=typeof cfg==='object'?cfg.dia:cfg;
+  const base=inicioPeriodoBase(d,dH);
+  const diaAnterior=typeof cfg==='object'?cfg.diaAnterior:null;
+  const cambiadoEl=typeof cfg==='object'?cfg.cambiadoEl:null;
+  if(!diaAnterior||!cambiadoEl)return base;
+  const cambio=new Date(cambiadoEl+'T00:00:00');
+  let primerCierreNuevo=new Date(cambio.getFullYear(),cambio.getMonth(),d);
+  if(primerCierreNuevo<cambio)primerCierreNuevo.setMonth(primerCierreNuevo.getMonth()+1);
+  if(dH>primerCierreNuevo)return base; // ya pasó el primer cierre con el día nuevo: el anterior ya no aplica
+  const alt=inicioPeriodoBase(diaAnterior,dH);
+  return alt>base?alt:base;
+}
 function proximoCierreFecha(d,dH=new Date()){const f=new Date(dH.getFullYear(),dH.getMonth(),d);if(dH.getDate()>d)f.setMonth(f.getMonth()+1);return f;}
 function calcularCuotaActual(fechaCompra,diaCierre,fechaReferencia=null){
   const fC=new Date(fechaCompra+'T00:00:00');
@@ -1694,7 +1709,19 @@ async function saveCierres(){
   tarjetas.filter(t=>t.esTarjeta).forEach(t=>{
     const dia=parseInt(document.getElementById('cierre-'+t.id)?.value);
     const limite=parseFloat(document.getElementById('limite-'+t.id)?.value);
-    if(dia>=1&&dia<=31)cierres[t.id]={dia,limite:(!isNaN(limite)&&limite>0)?limite:null};
+    if(dia>=1&&dia<=31){
+      const anterior=cierres[t.id];
+      const nuevo={dia,limite:(!isNaN(limite)&&limite>0)?limite:null};
+      if(anterior?.dia&&anterior.dia!==dia){
+        // Guardamos el día viejo para no "revivir" gastos que ya habían cerrado con esa fecha
+        nuevo.diaAnterior=anterior.dia;
+        nuevo.cambiadoEl=today();
+      }else if(anterior?.diaAnterior&&anterior?.cambiadoEl){
+        nuevo.diaAnterior=anterior.diaAnterior;
+        nuevo.cambiadoEl=anterior.cambiadoEl;
+      }
+      cierres[t.id]=nuevo;
+    }
     else delete cierres[t.id];
   });
   await dbGuardarConfig(cierres);closeModals();renderAll();
@@ -1800,7 +1827,7 @@ function updateHero(){
 
 function getGastosPeriodoActual(tId,gList){
   const cfg=cierres[tId];if(!cfg?.dia)return{ars:0,usd:0};
-  const desde=inicioPeriodo(cfg.dia),hasta=proximoCierreFecha(cfg.dia);
+  const desde=inicioPeriodo(cfg),hasta=proximoCierreFecha(cfg.dia);
   let ars=0,usd=0;
   // Gastos normales
   gList.filter(g=>{
@@ -1855,7 +1882,7 @@ function renderDashboard(){
     const totalArsConUSD=ars+usdEnArs;
     const interes=Math.round(totalArsConUSD*INTERES);
     const totalConInteres=totalArsConUSD+interes;
-    const fDesde=inicioPeriodo(cfg.dia),fHasta=proximoCierreFecha(cfg.dia);
+    const fDesde=inicioPeriodo(cfg),fHasta=proximoCierreFecha(cfg.dia);
     const strDesde=fDesde.toLocaleDateString('es-AR',{day:'numeric',month:'short'});
     const strHasta=fHasta.toLocaleDateString('es-AR',{day:'numeric',month:'short'});
     const diff=Math.ceil((fHasta-new Date())/(1000*60*60*24));
