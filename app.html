@@ -389,6 +389,7 @@
 <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 5-3 8-7 9-4-1-7-4-7-9V6z"/></symbol>
 <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></symbol>
 <symbol id="i-leaf" viewBox="0 0 24 24"><path d="M5 19c-1-7 3-14 14-14 1 8-4 14-14 14z"/><line x1="5" y1="19" x2="13" y2="11"/></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
 <symbol id="i-fingerprint" viewBox="0 0 24 24"><path d="M12 3c-4 0-7 2.5-7 6.5 0 2 .5 3.5 1 5"/><path d="M12 3c4 0 7 2.5 7 6.5 0 1.5-.2 2.7-.5 3.8"/><path d="M9 21c-1-2-2-4.5-2-7 0-3 2.2-5 5-5s5 2 5 5c0 .8-.1 1.6-.3 2.4"/><path d="M12 9c1.7 0 3 1.3 3 3 0 3.5-1 6-2 8"/><path d="M9.5 9.5c-1 1-1.5 2.3-1.5 3.7 0 2 .5 3.8 1.3 5.3"/></symbol>
 <symbol id="i-plus" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></symbol>
 <symbol id="i-minus" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/></symbol>
@@ -400,7 +401,12 @@
   <div class="lock-ico" id="lock-btn" onclick="intentarDesbloqueo()"><svg class="icon"><use href="#i-fingerprint"></use></svg></div>
   <h2 id="lock-title">Desbloqueá con tu huella</h2>
   <p id="lock-sub">Tocá el ícono para verificar tu identidad y entrar a Mis Gastos.</p>
+  <div style="width:100%;max-width:220px;display:none" id="lock-pin-wrap">
+    <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" id="lock-pin-input" placeholder="Código" onkeydown="if(event.key==='Enter')verificarPinLock()" style="width:100%;text-align:center;font-size:24px;letter-spacing:6px;margin-bottom:14px">
+  </div>
   <div class="lock-err" id="lock-err"></div>
+  <button class="btn-submit" id="lock-pin-btn" style="display:none;max-width:220px;margin-top:0" onclick="verificarPinLock()">Desbloquear</button>
+  <button class="btn-secondary" id="lock-switch-btn" style="max-width:220px;display:none" onclick="alternarModoLock()">Usar código</button>
   <button class="btn-secondary" style="max-width:220px" onclick="cerrarSesionDesdeLock()">Cerrar sesión</button>
 </div>
 
@@ -563,6 +569,12 @@
             <span class="toggle-slider"></span>
           </label>
         </div>
+        <div class="config-item" onclick="abrirModalPin()">
+          <div class="ico-box" style="background:var(--accent-dim);color:var(--accent)"><svg class="icon"><use href="#i-lock"></use></svg></div>
+          <div style="flex:1"><div class="name">Código de acceso</div><div class="sub" id="perfil-pin-sub">Sin configurar</div></div>
+          <div class="arr">›</div>
+        </div>
+        <p style="font-size:12px;color:var(--muted);margin-top:8px;line-height:1.5">Sirve como alternativa cuando no tenés lector de huella, por ejemplo desde la computadora.</p>
       </div>
       <div style="margin-bottom:20px">
         <p class="section-title">Notificaciones</p>
@@ -650,6 +662,20 @@
       <input type="number" id="p-monto" class="amount-input" placeholder="0" inputmode="decimal" style="font-size:28px">
     </div>
     <button class="btn-submit" onclick="guardarPresupuesto()">Guardar</button>
+    <button class="btn-secondary" onclick="closeModals()">Cancelar</button>
+  </div>
+</div>
+
+<!-- Modal Código de acceso (PIN) -->
+<div class="modal-overlay" id="modal-pin">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title"><svg class="icon"><use href="#i-lock"></use></svg> Código de acceso</div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.5">Un código de 4 a 6 números para desbloquear la app cuando no tengas lector de huella (por ejemplo, desde la computadora).</p>
+    <div class="field"><label>Código nuevo</label><input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" id="pin-nuevo" placeholder="••••"></div>
+    <div class="field"><label>Repetir código</label><input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" id="pin-confirmar" placeholder="••••"></div>
+    <button class="btn-submit" id="btn-save-pin" onclick="guardarPin()">Guardar código</button>
+    <button class="btn-submit btn-danger" id="btn-quitar-pin" style="display:none" onclick="quitarPin()">Quitar código</button>
     <button class="btn-secondary" onclick="closeModals()">Cancelar</button>
   </div>
 </div>
@@ -901,30 +927,65 @@ async function verificarHuella(){
   }});
 }
 
+// ── Código de acceso (PIN, alternativa sin huella) ───
+function generarSalt(){return Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b=>b.toString(16).padStart(2,'0')).join('');}
+async function hashPin(pin,salt){
+  const data=new TextEncoder().encode(salt+':'+pin);
+  const buf=await crypto.subtle.digest('SHA-256',data);
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+function huellaLocalConfigurada(){return !!localStorage.getItem(huellaCredKey());}
+
 let resolverDesbloqueo=null;
+function decidirModoInicial(){
+  if(biometricEnabled&&huellaSoportada()&&huellaLocalConfigurada())return'bio';
+  if(pinHash)return'pin';
+  if(biometricEnabled&&huellaSoportada())return'setup';
+  return'pin';
+}
 function mostrarLock(mode){
   const overlay=document.getElementById('lock-overlay');
   const title=document.getElementById('lock-title');
   const sub=document.getElementById('lock-sub');
   document.getElementById('lock-err').textContent='';
+  const esBio=mode==='bio'||mode==='setup';
+  document.getElementById('lock-btn').style.display=esBio?'flex':'none';
+  document.getElementById('lock-pin-wrap').style.display=esBio?'none':'block';
+  document.getElementById('lock-pin-btn').style.display=esBio?'none':'block';
+  const puedeAlternar=esBio?!!pinHash:(biometricEnabled&&huellaSoportada());
+  const btnAlt=document.getElementById('lock-switch-btn');
+  btnAlt.style.display=puedeAlternar?'block':'none';
+  btnAlt.textContent=esBio?'Usar código':'Usar huella';
   if(mode==='setup'){
     title.textContent='Configurá tu huella en este dispositivo';
     sub.textContent='Activaste el desbloqueo por huella. Configurala acá para poder entrar la próxima vez.';
-  }else{
+  }else if(mode==='bio'){
     title.textContent='Desbloqueá con tu huella';
     sub.textContent='Te vamos a pedir la huella automáticamente. Si no aparece, tocá el ícono.';
+  }else{
+    title.textContent='Ingresá tu código';
+    sub.textContent='Escribí el código que configuraste para entrar.';
+    const input=document.getElementById('lock-pin-input');
+    input.value='';
+    setTimeout(()=>input.focus(),150);
   }
   overlay.dataset.mode=mode;
   overlay.style.display='flex';
   hideLoading();
-  if(mode==='verify')setTimeout(intentarDesbloqueo,250);
+  if(mode==='bio')setTimeout(intentarDesbloqueo,250);
 }
 function ocultarLock(){document.getElementById('lock-overlay').style.display='none';}
+
+function alternarModoLock(){
+  const modoActual=document.getElementById('lock-overlay').dataset.mode;
+  mostrarLock(modoActual==='pin'?(huellaLocalConfigurada()?'bio':'setup'):'pin');
+}
 
 async function intentarDesbloqueo(){
   const overlay=document.getElementById('lock-overlay');
   const err=document.getElementById('lock-err');
   const mode=overlay.dataset.mode;
+  if(mode==='pin')return;
   const btn=document.getElementById('lock-btn');
   err.textContent='';
   btn.style.opacity='.5';
@@ -940,12 +1001,28 @@ async function intentarDesbloqueo(){
   }
 }
 
+async function verificarPinLock(){
+  const input=document.getElementById('lock-pin-input');
+  const err=document.getElementById('lock-err');
+  const val=input.value.trim();
+  if(!val)return;
+  const hash=await hashPin(val,pinSalt);
+  if(hash===pinHash){
+    ocultarLock();
+    if(resolverDesbloqueo){const r=resolverDesbloqueo;resolverDesbloqueo=null;r();}
+  }else{
+    err.textContent='Código incorrecto.';
+    input.value='';
+    input.focus();
+  }
+}
+
 async function cerrarSesionDesdeLock(){await sb.auth.signOut();window.location.href='login.html';}
 
 function esperarDesbloqueo(){
   return new Promise(resolve=>{
     resolverDesbloqueo=resolve;
-    mostrarLock(localStorage.getItem(huellaCredKey())?'verify':'setup');
+    mostrarLock(decidirModoInicial());
   });
 }
 
@@ -972,15 +1049,43 @@ async function toggleBiometrico(checked){
 function renderHuellaUI(){
   const chk=document.getElementById('chk-huella');
   const sub=document.getElementById('perfil-huella-sub');
-  if(!chk||!sub)return;
-  if(!huellaSoportada()){
-    chk.checked=false;chk.disabled=true;
-    sub.textContent='No disponible en este dispositivo/navegador';
-    return;
+  if(chk&&sub){
+    if(!huellaSoportada()){
+      chk.checked=false;chk.disabled=true;
+      sub.textContent='No disponible en este dispositivo/navegador';
+    }else{
+      chk.disabled=false;
+      chk.checked=biometricEnabled;
+      sub.textContent=biometricEnabled?'Activado en este dispositivo':'Agrega un candado extra al abrir la app';
+    }
   }
-  chk.disabled=false;
-  chk.checked=biometricEnabled;
-  sub.textContent=biometricEnabled?'Activado en este dispositivo':'Agrega un candado extra al abrir la app';
+  const pinSub=document.getElementById('perfil-pin-sub');
+  if(pinSub)pinSub.textContent=pinHash?'Configurado · tocá para cambiarlo':'Sin configurar';
+}
+
+function abrirModalPin(){
+  document.getElementById('pin-nuevo').value='';
+  document.getElementById('pin-confirmar').value='';
+  document.getElementById('btn-quitar-pin').style.display=pinHash?'block':'none';
+  openModalWithHistory('modal-pin');
+}
+async function guardarPin(){
+  const p1=document.getElementById('pin-nuevo').value.trim();
+  const p2=document.getElementById('pin-confirmar').value.trim();
+  if(!/^\d{4,6}$/.test(p1)){err('pin-nuevo');return;}
+  if(p1!==p2){err('pin-confirmar');return;}
+  const btn=document.getElementById('btn-save-pin');btn.disabled=true;btn.textContent='Guardando...';
+  const salt=generarSalt();
+  const hash=await hashPin(p1,salt);
+  await dbGuardarPin(hash,salt);
+  btn.disabled=false;btn.textContent='Guardar código';
+  closeModals();renderHuellaUI();
+}
+async function quitarPin(){
+  const btn=document.getElementById('btn-quitar-pin');btn.disabled=true;btn.textContent='Quitando...';
+  await dbGuardarPin(null,null);
+  btn.disabled=false;btn.textContent='Quitar código';
+  closeModals();renderHuellaUI();
 }
 
 // ── Sistema de íconos propio (reemplaza los emojis) ──
@@ -1083,7 +1188,7 @@ async function dbCargarAhorros(){
 async function dbUpsertAhorro(a){await sb.from('ahorros_movimientos').upsert({id:a.id,user_id:currentUser.id,monto:a.monto,tipo:a.tipo,descripcion:a.desc,fecha:a.fecha});}
 async function dbDeleteAhorro(id){await sb.from('ahorros_movimientos').delete().eq('id',id).eq('user_id',currentUser.id);}
 async function dbCargarConfig(){
-  const{data}=await sb.from('config').select('cierres, notif_config, dolar_blue, dolar_updated, presupuesto_mensual, biometric_enabled').eq('user_id',currentUser.id).maybeSingle();
+  const{data}=await sb.from('config').select('cierres, notif_config, dolar_blue, dolar_updated, presupuesto_mensual, biometric_enabled, pin_hash, pin_salt').eq('user_id',currentUser.id).maybeSingle();
   return {
     cierres: data?.cierres||{},
     notifConfig: data?.notif_config||{},
@@ -1091,15 +1196,27 @@ async function dbCargarConfig(){
     dolarUpdated: data?.dolar_updated||null,
     presupuesto: parseFloat(data?.presupuesto_mensual)||0,
     biometricEnabled: !!data?.biometric_enabled,
+    pinHash: data?.pin_hash||null,
+    pinSalt: data?.pin_salt||null,
   };
 }
 async function dbGuardarBiometrico(enabled){
   biometricEnabled=enabled;
   const {error} = await sb.from('config').upsert({
     user_id:currentUser.id,cierres,notif_config:notifConfig,dolar_blue:dolarBlue,
-    presupuesto_mensual:presupuestoMensual,biometric_enabled:enabled,updated_at:new Date().toISOString()
+    presupuesto_mensual:presupuestoMensual,biometric_enabled:enabled,pin_hash:pinHash,pin_salt:pinSalt,
+    updated_at:new Date().toISOString()
   });
   if(error) console.error('Error guardando biometric_enabled:', error);
+}
+async function dbGuardarPin(hash,salt){
+  pinHash=hash;pinSalt=salt;
+  const {error} = await sb.from('config').upsert({
+    user_id:currentUser.id,cierres,notif_config:notifConfig,dolar_blue:dolarBlue,
+    presupuesto_mensual:presupuestoMensual,biometric_enabled:biometricEnabled,pin_hash:hash,pin_salt:salt,
+    updated_at:new Date().toISOString()
+  });
+  if(error) console.error('Error guardando PIN:', error);
 }
 async function dbGuardarConfig(c){
   cierres=c;
@@ -1156,6 +1273,7 @@ async function dbDeleteCat(id){await sb.from('categorias').delete().eq('id',id).
 let gastos=[],subs=[],ingresos=[],pagosSubs=[],cierres={},notifConfig={},tarjetas=[],cats=[],ahorros=[];
 let dolarBlue=0, presupuestoMensual=0, mesOffset=0; // mesOffset: 0=este mes, -1=mes anterior, -2=hace 2 meses
 let biometricEnabled=false;
+let pinHash=null,pinSalt=null;
 let tabActual='gastos';
 let selPagoGasto=null,selCatGasto=null,selPagoSub=null,selCatSub=null,selCatIngreso='sueldo',selTipoAhorro='aporte';
 const TIPOS_AHORRO=[{id:'aporte',nombre:'Aporte',icono:'plus'},{id:'retiro',nombre:'Retiro',icono:'minus'}];
@@ -2623,7 +2741,9 @@ async function initPushNotifications() {
     dolarBlue = configData.dolarBlue;
     presupuestoMensual = configData.presupuesto;
     biometricEnabled = configData.biometricEnabled;
-    if(biometricEnabled && huellaSoportada()){
+    pinHash = configData.pinHash;
+    pinSalt = configData.pinSalt;
+    if((biometricEnabled && huellaSoportada()) || pinHash){
       await esperarDesbloqueo();
       showLoading('Cargando datos...');
     }
