@@ -912,11 +912,12 @@ function mostrarLock(mode){
     sub.textContent='Activaste el desbloqueo por huella. Configurala acá para poder entrar la próxima vez.';
   }else{
     title.textContent='Desbloqueá con tu huella';
-    sub.textContent='Tocá el ícono para verificar tu identidad y entrar a Mis Gastos.';
+    sub.textContent='Te vamos a pedir la huella automáticamente. Si no aparece, tocá el ícono.';
   }
   overlay.dataset.mode=mode;
   overlay.style.display='flex';
   hideLoading();
+  if(mode==='verify')setTimeout(intentarDesbloqueo,250);
 }
 function ocultarLock(){document.getElementById('lock-overlay').style.display='none';}
 
