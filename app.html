@@ -18,6 +18,7 @@
       --border:rgba(198,198,205,0.09);--border-2:rgba(198,198,205,0.16);
       --text:#dce1fb;--muted:rgba(220,225,251,0.42);--muted-2:rgba(220,225,251,0.62);
       --accent:#bec6e0;--accent-dark:#8f9ab8;--accent-dim:rgba(190,198,224,0.14);--on-accent:#20263a;
+      --accent2:#4e3895;--accent2-dark:#3d2b78;--accent2-dim:rgba(78,56,149,0.22);--on-accent2:#ece6ff;
       --danger:#ffb4ab;--danger-dim:rgba(255,180,171,0.12);--on-danger:#4a140f;
       --warning:#f0c56b;--warning-dim:rgba(240,197,107,0.12);--on-warning:#3a2a05;
       --success:#7fe3c4;--success-dim:rgba(127,227,196,0.12);--on-success:#0d2b23;
@@ -76,7 +77,7 @@
     }
     .nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 2px;border:none;background:none;color:var(--muted);font-size:10px;font-weight:600;cursor:pointer;transition:all .2s;letter-spacing:.01em;border-radius:99px}
     .nav-btn svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;transition:all .2s}
-    .nav-btn.active{flex:0 0 auto;color:var(--on-accent);background:var(--accent);padding:8px 18px;margin:0 4px;transform:scale(1.04)}
+    .nav-btn.active{flex:0 0 auto;color:var(--on-accent2);background:var(--accent2);padding:8px 18px;margin:0 4px;transform:scale(1.04)}
     .nav-btn.active svg{stroke-width:2.4}
     .panel{display:none}.panel.active{display:block;animation:fadeIn .2s ease}
     @keyframes fadeIn{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:translateY(0)}}
@@ -124,12 +125,12 @@
     }
 
     /* ── Botones ── */
-    .btn-submit{position:relative;overflow:hidden;width:100%;padding:16px;background:var(--accent);color:var(--on-accent);border:none;border-radius:var(--radius-sm);font-size:16px;font-weight:700;cursor:pointer;margin-top:8px;transition:opacity .15s,transform .1s;letter-spacing:-.1px}
+    .btn-submit{position:relative;overflow:hidden;width:100%;padding:16px;background:var(--accent2);color:var(--on-accent2);border:none;border-radius:var(--radius-sm);font-size:16px;font-weight:700;cursor:pointer;margin-top:8px;transition:opacity .15s,transform .1s;letter-spacing:-.1px}
     .btn-submit::after{content:'';position:absolute;top:-50%;left:-60%;width:60%;height:200%;background:linear-gradient(to right,rgba(255,255,255,0) 0%,rgba(255,255,255,0.35) 50%,rgba(255,255,255,0) 100%);transform:rotate(20deg);transition:left .6s cubic-bezier(.4,0,.2,1);pointer-events:none}
     .btn-submit:active{opacity:.88;transform:scale(0.99)}
     .btn-submit:active::after{left:120%}
     .btn-submit:disabled{opacity:.45;cursor:not-allowed}
-    .btn-success{background:var(--success);color:var(--on-success)}
+    .btn-success{background:var(--accent2);color:var(--on-accent2)}
     .btn-danger{background:var(--danger);color:var(--on-danger)}
     .btn-secondary{width:100%;padding:14px;background:transparent;color:var(--muted-2);border:1.5px solid var(--border-2);border-radius:var(--radius-sm);font-size:15px;font-weight:600;cursor:pointer;margin-top:8px}
 
@@ -304,7 +305,7 @@
     .sp-meta{font-size:12px;color:var(--muted);margin-top:2px}
     .sp-amount{font-size:15px;font-weight:800;color:var(--warning)}
     .sp-btns{display:flex;gap:8px}
-    .sp-btn-si{flex:1;padding:10px;background:var(--success);color:var(--on-success);border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer}
+    .sp-btn-si{flex:1;padding:10px;background:var(--accent2);color:var(--on-accent2);border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer}
     .sp-btn-no{flex:1;padding:10px;background:rgba(255,255,255,0.05);color:var(--muted);border:1px solid var(--border-2);border-radius:10px;font-size:13px;font-weight:600;cursor:pointer}
 
     /* ── TC tabs ── */
@@ -2461,7 +2462,7 @@ function renderSubs(){
         <div style="font-size:12px;color:var(--muted);margin-top:2px">Debita <strong style="color:${e.diff<=2?'var(--danger)':'var(--text)'}">${txt.toLowerCase()}</strong></div></div>
         <div style="font-weight:700;font-size:15px">${fmt(e.monto,e.moneda)}</div>
       </div>
-      <button onclick="confirmarPago(${e.id},true,this)" style="width:100%;padding:8px;background:var(--success);color:var(--on-success);border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">${ic('check-circle','icon-sm')} Ya lo pagué</button>
+      <button onclick="confirmarPago(${e.id},true,this)" style="width:100%;padding:8px;background:var(--accent2);color:var(--on-accent2);border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">${ic('check-circle','icon-sm')} Ya lo pagué</button>
     </div>`;
   };
   document.getElementById('subs-vencimientos-list').innerHTML=eventosSubs.length
@@ -2469,7 +2470,7 @@ function renderSubs(){
     :'<div style="font-size:13px;color:var(--muted);padding:8px 0">Sin próximos débitos</div>';
 
   const lista=document.getElementById('s-lista');
-  if(!subs.length){lista.innerHTML=`<div class="empty"><div class="ico">${ic('refresh')}</div><p style="font-weight:600;font-size:14px;margin-bottom:6px">Sin suscripciones</p><p style="font-size:13px">Agregá Netflix, Spotify y cualquier servicio que debitás cada mes.</p><button onclick="openModalSub()" style="margin-top:14px;padding:10px 20px;background:var(--accent);color:var(--on-accent);border:none;border-radius:99px;font-size:13px;font-weight:700;cursor:pointer">+ Agregar suscripción</button></div>`;return;}
+  if(!subs.length){lista.innerHTML=`<div class="empty"><div class="ico">${ic('refresh')}</div><p style="font-weight:600;font-size:14px;margin-bottom:6px">Sin suscripciones</p><p style="font-size:13px">Agregá Netflix, Spotify y cualquier servicio que debitás cada mes.</p><button onclick="openModalSub()" style="margin-top:14px;padding:10px 20px;background:var(--accent2);color:var(--on-accent2);border:none;border-radius:99px;font-size:13px;font-weight:700;cursor:pointer">+ Agregar suscripción</button></div>`;return;}
   const hoyDia=hoy.getDate();
   const subsOrdenadas=[...subs].sort((a,b)=>a.dia-b.dia);
   const renderSubItem=s=>{
@@ -2546,7 +2547,7 @@ function renderBalance(){
   }).join('')||'<div style="font-size:13px;color:var(--muted);padding:8px 0">Sin ingresos este mes</div>';
   const lista=document.getElementById('i-lista');
   const iMes=[...ingresos].filter(i=>{const d=new Date(i.fecha+'T00:00:00');return d.getMonth()===mesRef.getMonth()&&d.getFullYear()===mesRef.getFullYear();}).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
-  if(!iMes.length){lista.innerHTML=`<div class="empty"><div class="ico">${ic('trending-up')}</div><p style="font-weight:600;font-size:14px;margin-bottom:6px">Sin ingresos este mes</p><p style="font-size:13px">Registrá tu sueldo y otras entradas para ver tu balance real.</p><button onclick="openModalIngreso()" style="margin-top:14px;padding:10px 20px;background:var(--success);color:var(--on-success);border:none;border-radius:99px;font-size:13px;font-weight:700;cursor:pointer">+ Agregar ingreso</button></div>`;return;}
+  if(!iMes.length){lista.innerHTML=`<div class="empty"><div class="ico">${ic('trending-up')}</div><p style="font-weight:600;font-size:14px;margin-bottom:6px">Sin ingresos este mes</p><p style="font-size:13px">Registrá tu sueldo y otras entradas para ver tu balance real.</p><button onclick="openModalIngreso()" style="margin-top:14px;padding:10px 20px;background:var(--accent2);color:var(--on-accent2);border:none;border-radius:99px;font-size:13px;font-weight:700;cursor:pointer">+ Agregar ingreso</button></div>`;return;}
   lista.innerHTML=iMes.map(i=>{
     const c=getCatIngreso(i.cat);const fl=new Date(i.fecha+'T00:00:00').toLocaleDateString('es-AR',{day:'numeric',month:'short'});const usdTag=i.moneda==='USD'?`<span class="usd-tag">USD</span>`:'';
     return`<div class="ingreso-item" onclick="openModalIngreso(${i.id})"><div class="ico">${ic(c.icono)}</div><div class="info"><div class="desc">${i.desc}</div><div class="meta">${c.nombre} · ${fl} ${usdTag}</div></div><div class="amount">${fmt(i.monto,i.moneda)}</div></div>`;
@@ -2607,7 +2608,7 @@ function renderNotifConfig(){
                   style="width:90px;padding:6px 8px;font-size:13px;background:var(--card-2);border:1px solid var(--border-2);border-radius:8px;color:var(--text);font-family:inherit">
               </div>
             </div>
-            <button id="btn_confirm_${key}" onclick="updateNotifConfig('${key}')" style="padding:8px 16px;background:var(--accent);color:var(--on-accent);border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;align-self:flex-start;transition:all .2s">✓ Confirmar</button>
+            <button id="btn_confirm_${key}" onclick="updateNotifConfig('${key}')" style="padding:8px 16px;background:var(--accent2);color:var(--on-accent2);border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;align-self:flex-start;transition:all .2s">✓ Confirmar</button>
           </div>
         </div>
       </div>
