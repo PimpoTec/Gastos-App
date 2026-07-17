@@ -68,7 +68,7 @@
     .hero-mini .val{font-size:22px;font-weight:800;color:rgba(255,255,255,0.95);letter-spacing:-0.5px}
 
     /* ── Layout ── */
-    .content{position:fixed;top:0;left:0;right:0;bottom:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:16px 16px;padding-top:80px;padding-bottom:80px}
+    .content{position:fixed;top:0;left:0;right:0;bottom:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:16px 20px;padding-top:80px;padding-bottom:80px}
     .bottom-nav{display:flex;align-items:center;background:rgba(12,19,36,0.82);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-top:1px solid var(--border-2);border-radius:20px 20px 0 0;padding-bottom:env(safe-area-inset-bottom,4px);position:fixed;bottom:0;left:0;right:0;z-index:50;box-shadow:var(--shadow-md)}
     @media (display-mode: standalone) {
       .bottom-nav{padding-bottom:env(safe-area-inset-bottom,4px)}
@@ -134,7 +134,7 @@
     .btn-secondary{width:100%;padding:14px;background:transparent;color:var(--muted-2);border:1.5px solid var(--border-2);border-radius:var(--radius-sm);font-size:15px;font-weight:600;cursor:pointer;margin-top:8px}
 
     /* ── Section title ── */
-    .section-title{font-size:11px;font-weight:700;color:var(--muted-2);text-transform:uppercase;letter-spacing:.09em;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between}
+    .section-title{font-size:11px;font-weight:700;color:var(--muted-2);text-transform:uppercase;letter-spacing:.09em;margin:28px 0 14px;display:flex;align-items:center;justify-content:space-between}
     .section-title .btn-cfg{font-size:11px;color:var(--accent);background:var(--accent-dim);border:1px solid rgba(190,198,224,0.22);cursor:pointer;padding:5px 11px;border-radius:99px;font-weight:700;text-transform:none;letter-spacing:0}
 
     /* ── Tarjetas breakdown ── */
@@ -152,6 +152,25 @@
     .bar.ok{background:linear-gradient(90deg,var(--accent-dark),var(--accent))}.bar.over{background:var(--danger)}
     .limite-txt{font-size:11px;margin-top:5px;font-weight:500}
     .cierre-info{display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:var(--muted)}
+
+    /* ── Consejo financiero (insight card) ── */
+    .insight-card{background:var(--card);border:1px solid var(--border-2);border-radius:var(--radius);padding:18px;margin-top:14px;backdrop-filter:blur(14px)}
+    .insight-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+    .insight-eyebrow{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--accent)}
+    .insight-title{font-size:16px;font-weight:800;letter-spacing:-.2px;margin-bottom:6px}
+    .insight-body{font-size:13.5px;color:var(--muted);line-height:1.55;margin:0}
+    .insight-body strong{color:var(--accent);font-weight:700}
+
+    /* ── Cuotas ── */
+    .cuota-item{background:var(--card);border-radius:var(--radius-sm);padding:14px;margin-bottom:10px;cursor:pointer;border:1px solid var(--border);backdrop-filter:blur(14px)}
+    .cuota-top{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+    .cuota-top .ico{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+    .cuota-top .info{flex:1;min-width:0}
+    .cuota-top .desc{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .cuota-top .meta{font-size:11.5px;color:var(--muted);margin-top:3px}
+    .cuota-bottom{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted-2);font-weight:600;margin-bottom:6px}
+    .cuota-item .bar-wrap{height:4px;background:rgba(255,255,255,0.06);border-radius:99px;overflow:hidden}
+    .cuota-item .bar{height:100%;border-radius:99px;transition:width .5s}
 
     /* ── Feed items ── */
     .feed-dia{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin:18px 0 10px;display:flex;align-items:center;gap:10px}
@@ -441,15 +460,16 @@
         <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none" id="cuotas-tarjeta-tabs"></div>
       </div>
       <div class="hero-card" style="padding:18px 18px 16px">
-        <div class="hero-lbl">Resumen de cuotas</div>
-        <div class="hero-row" style="margin-top:12px">
+        <div class="hero-lbl">Deuda total en cuotas</div>
+        <div class="hero-val" id="cu-deuda-hero" style="font-size:34px">$0</div>
+        <div class="hero-row" style="margin-top:14px">
           <div class="hero-mini">
             <div class="lbl">Este mes</div>
             <div class="val" id="cu-mes-hero">$0</div>
           </div>
           <div class="hero-mini">
-            <div class="lbl">Próximo cobro</div>
-            <div class="val" id="cu-prox-hero" style="font-size:13px;margin-top:2px;line-height:1.4">—</div>
+            <div class="lbl">Cuotas activas</div>
+            <div class="val" id="cu-activas-hero">0</div>
           </div>
         </div>
       </div>
@@ -498,17 +518,25 @@
 
     <!-- CUOTAS -->
     <div class="panel" id="panel-cuotas">
-      <div class="section-title">Cuotas activas</div>
+      <div class="section-title" style="margin-top:4px">Cuotas activas</div>
       <div id="c-lista"></div>
+      <div class="insight-card" id="cu-insight" style="display:none">
+        <div class="insight-top">
+          <div class="insight-eyebrow"><svg class="icon icon-sm"><use href="#i-sparkle"></use></svg> Consejo financiero</div>
+          <svg class="icon" style="color:var(--muted)"><use href="#i-bulb"></use></svg>
+        </div>
+        <div class="insight-title" id="cu-insight-title"></div>
+        <p class="insight-body" id="cu-insight-body"></p>
+      </div>
     </div>
 
     <!-- SUSCRIPCIONES -->
     <div class="panel" id="panel-subs">
       <div id="subs-pendientes-wrap" style="display:none">
-        <div class="section-title" style="color:var(--warning)"><svg class="icon icon-sm"><use href="#i-alert"></use></svg> Pendientes de confirmar</div>
+        <div class="section-title" style="color:var(--warning);margin-top:4px"><svg class="icon icon-sm"><use href="#i-alert"></use></svg> Pendientes de confirmar</div>
         <div id="subs-pendientes-list" style="margin-bottom:20px"></div>
       </div>
-      <div class="section-title">Próximos débitos</div>
+      <div class="section-title" style="margin-top:4px">Próximos débitos</div>
       <div id="subs-vencimientos-list" style="margin-bottom:20px"></div>
       <div class="section-title">Suscripciones activas</div>
       <div id="s-lista"></div>
@@ -2073,43 +2101,58 @@ function renderCuotas(){
     return{...g,numCuota:n,t:getTarjeta(g.pago)};
   }).filter(g=>g.numCuota<=g.cuotas);
 
-  // Stats de la tarjeta seleccionada
-  const activasDeTarjeta=tSel?activas.filter(g=>g.pago==tSel.id&&g.moneda!=='USD'):[];
-  const totalMesSel=activasDeTarjeta.reduce((a,g)=>a+g.monto,0);
+  // Totales agregados (todas las tarjetas, no solo la seleccionada)
+  const montoArs=g=>g.moneda==='USD'?(dolarBlue>0?g.monto*dolarBlue:0):g.monto;
+  const totalMesTodas=activas.reduce((a,g)=>a+montoArs(g),0);
+  const deudaTotal=activas.reduce((a,g)=>a+montoArs(g)*(g.cuotas-g.numCuota+1),0);
   const cuMesHero=document.getElementById('cu-mes-hero');
-  const cuProxHero=document.getElementById('cu-prox-hero');
-  if(cuMesHero) cuMesHero.textContent=fmt(totalMesSel);
+  const cuDeudaHero=document.getElementById('cu-deuda-hero');
+  const cuActivasHero=document.getElementById('cu-activas-hero');
+  if(cuMesHero) cuMesHero.textContent=fmt(totalMesTodas);
+  if(cuDeudaHero) cuDeudaHero.textContent=fmt(deudaTotal);
+  if(cuActivasHero) cuActivasHero.textContent=activas.length;
 
-  // Próximo cobro de la tarjeta seleccionada
-  if(cuProxHero&&cfgSel?.dia){
-    const cierreActual=proximoCierreFecha(cfgSel.dia);
-    const cierreSig=new Date(cierreActual);cierreSig.setMonth(cierreSig.getMonth()+1);
-    const fechaProx=new Date(cierreActual);fechaProx.setDate(fechaProx.getDate()+1);
-    const montoProx=gastos.filter(g=>g.cuotas&&g.pago==tSel.id&&g.moneda!=='USD').reduce((a,g)=>{
-      const n=calcularCuotaActual(g.fecha,cfgSel.dia,fechaProx);
-      return n<=g.cuotas?a+g.monto:a;
-    },0);
-    const diff=Math.ceil((cierreActual-new Date())/(1000*60*60*24));
-    const txtDiff=diff===0?'hoy':diff===1?'mañana':`en ${diff} días`;
-    cuProxHero.innerHTML=`<span style="font-size:18px;font-weight:800">${fmt(montoProx)}</span><br><span style="font-size:11px;opacity:.7">Cierra ${txtDiff}</span>`;
-  } else if(cuProxHero){
-    cuProxHero.textContent='Sin cierre config.';
+  // Consejo financiero: la compra que está más cerca de terminarse de pagar
+  const insightEl=document.getElementById('cu-insight');
+  if(insightEl){
+    if(activas.length){
+      const proxima=[...activas].sort((a,b)=>(a.cuotas-a.numCuota)-(b.cuotas-b.numCuota))[0];
+      const restantes=proxima.cuotas-proxima.numCuota;
+      document.getElementById('cu-insight-title').textContent=restantes<=0?'Ya casi termina una cuota':'Proyectá tu próximo respiro';
+      document.getElementById('cu-insight-body').innerHTML=restantes<=0
+        ?`Esta es la última cuota de <strong>${proxima.desc}</strong>. El mes que viene liberás <strong>${fmt(montoArs(proxima))}</strong> de tu presupuesto.`
+        :`Terminás de pagar <strong>${proxima.desc}</strong> en ${restantes} ${restantes===1?'mes':'meses'}. Vas a liberar <strong>${fmt(montoArs(proxima))}</strong> de tu presupuesto mensual.`;
+      insightEl.style.display='block';
+    }else{
+      insightEl.style.display='none';
+    }
   }
 
   // Lista filtrada por tarjeta seleccionada
   const filtradas=tSel?activas.filter(g=>g.pago==tSel.id):activas;
   if(!filtradas.length){lista.innerHTML=`<div class="empty"><div class="ico">${ic('check-circle')}</div><p style="font-weight:600;font-size:14px;margin-bottom:4px">Sin cuotas activas${tSel?` en ${tSel.nombre}`:''}</p><p style="font-size:13px">Las compras en cuotas aparecen acá.</p></div>`;return;}
-  lista.innerHTML=filtradas.map(g=>`<div class="feed-item" onclick="openModalGasto(${g.id})">
-    <div class="ico" style="background:${getCat(g.cat,'gasto').color}22">${ic(getCat(g.cat,'gasto').icono)}</div>
-    <div class="info">
-      <div class="desc">${g.desc}</div>
-      <div class="meta">${new Date(g.fecha+'T00:00:00').toLocaleDateString('es-AR',{month:'short',year:'numeric'})}</div>
+  lista.innerHTML=filtradas.map(g=>{
+    const restantes=g.cuotas-g.numCuota+1;
+    const pct=Math.round((g.numCuota/g.cuotas)*100);
+    return`<div class="cuota-item" onclick="openModalGasto(${g.id})">
+    <div class="cuota-top">
+      <div class="ico" style="background:${getCat(g.cat,'gasto').color}22">${ic(getCat(g.cat,'gasto').icono)}</div>
+      <div class="info">
+        <div class="desc">${g.desc}</div>
+        <div class="meta">${new Date(g.fecha+'T00:00:00').toLocaleDateString('es-AR',{month:'short',year:'numeric'})}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:16px;font-weight:800;color:var(--accent)">${fmt(g.monto,g.moneda)}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">al mes</div>
+      </div>
     </div>
-    <div style="text-align:right;flex-shrink:0">
-      <div style="font-size:16px;font-weight:800;color:var(--accent)">${g.numCuota}/${g.cuotas}</div>
-      <div style="font-size:12px;color:var(--muted);margin-top:2px">${fmt(g.monto,g.moneda)}</div>
+    <div class="cuota-bottom">
+      <span>Cuota ${String(g.numCuota).padStart(2,'0')} / ${String(g.cuotas).padStart(2,'0')}</span>
+      <span>Restan ${fmt(g.monto*restantes,g.moneda)}</span>
     </div>
-  </div>`).join('');
+    <div class="bar-wrap"><div class="bar ok" style="width:${pct}%"></div></div>
+  </div>`;
+  }).join('');
 }
 
 // ── Carga rápida ────────────────────────────────────
