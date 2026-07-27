@@ -511,7 +511,7 @@
         <div class="sub" id="proy-mes-label">—</div>
         <div class="balance-row">
           <div class="balance-mini"><div class="lbl">Ingresos</div><div class="val" id="proy-ingresos-val">$0</div></div>
-          <div class="balance-mini"><div class="lbl">Comprometido</div><div class="val" id="proy-comprometido-val">$0</div></div>
+          <div class="balance-mini"><div class="lbl">Gastos</div><div class="val" id="proy-comprometido-val">$0</div></div>
         </div>
       </div>
     </div>
@@ -587,25 +587,22 @@
         <span id="proy-mes-nav-label" style="font-size:13px;font-weight:600;color:var(--muted-2)">—</span>
         <button onclick="cambiarMesProyeccion(1)" style="background:var(--card);border:1px solid var(--border-2);color:var(--text);padding:6px 12px;border-radius:99px;cursor:pointer;font-size:13px;font-weight:600">Siguiente →</button>
       </div>
-      <p style="font-size:12.5px;color:var(--muted);margin-bottom:16px;line-height:1.5">Simulá cómo te va a quedar la plata este mes. No afecta tus gastos e ingresos reales.</p>
+      <p style="font-size:12.5px;color:var(--muted);margin-bottom:16px;line-height:1.5">Simulá cómo te va a quedar la plata este mes. Las cuotas y suscripciones son solo informativas: no restan del disponible, vos agregás a mano lo que efectivamente vas a pagar.</p>
 
-      <div class="section-title" style="margin-top:4px">Ingresos proyectados <button class="btn-cfg" onclick="abrirModalProyeccion('ingreso')">+ Agregar</button></div>
+      <div class="section-title" style="margin-top:4px">Proyectado por medio de pago</div>
+      <div class="pago-breakdown" id="proy-breakdown"></div>
+
+      <div class="section-title">Ingresos proyectados <button class="btn-cfg" onclick="abrirModalProyeccion('ingreso')">+ Agregar</button></div>
       <div id="proy-ingresos-lista"></div>
 
-      <div class="section-title">Pago de tarjeta y débito</div>
-      <div id="proy-comprometido-lista"></div>
+      <div class="section-title">Cuotas en curso</div>
+      <div id="proy-cuotas-lista"></div>
+
+      <div class="section-title">Suscripciones</div>
+      <div id="proy-subs-lista"></div>
 
       <div class="section-title">Gastos que planeás <button class="btn-cfg" onclick="abrirModalProyeccion('gasto')">+ Agregar</button></div>
       <div id="proy-gastos-lista"></div>
-
-      <div class="insight-card" id="proy-tarjeta-futura" style="display:none;margin-top:14px">
-        <div class="insight-top">
-          <div class="insight-eyebrow"><svg class="icon icon-sm"><use href="#i-card"></use></svg> Vas a seguir usando la tarjeta</div>
-        </div>
-        <div class="insight-title" id="proy-tarjeta-futura-monto"></div>
-        <p class="insight-body" style="margin-bottom:10px">No restan de este mes — se van a pagar cuando cierre esa tarjeta, más adelante.</p>
-        <div id="proy-tarjeta-futura-lista"></div>
-      </div>
     </div>
 
     <!-- PERFIL -->
@@ -1300,26 +1297,29 @@ async function dbUpsertProyeccionItem(p){await sb.from('proyeccion_items').upser
 async function dbDeleteProyeccionItem(id){await sb.from('proyeccion_items').delete().eq('id',id).eq('user_id',currentUser.id);}
 
 // ── Proyección ───────────────────────────────────────
-// cicloDate(0) = ciclo del mes objetivo (lo que se sigue acumulando en la tarjeta, se paga el mes siguiente).
-// cicloDate(-1) = ciclo anterior al mes objetivo (lo que ya cerró y hay que pagar este mes).
-function cicloDateProyeccion(offset){const d=new Date();d.setDate(20);d.setMonth(d.getMonth()+mesOffsetProyeccion+offset);return d;}
-function targetDateProyeccion(){return cicloDateProyeccion(0);}
+// Cuotas y suscripciones son puramente informativas acá: nunca restan solas del
+// disponible. Lo único que resta es lo que el usuario carga a mano como gasto
+// planeado sin marcar "tarjeta" (por ejemplo, el pago de la tarjeta del mes
+// anterior, que él mismo agrega como un gasto más).
+function targetDateProyeccion(){const d=new Date();d.setDate(20);d.setMonth(d.getMonth()+mesOffsetProyeccion);return d;}
 function mesKeyProyeccion(){const d=targetDateProyeccion();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
 
 function cambiarMesProyeccion(delta){mesOffsetProyeccion+=delta;renderProyeccion();}
 
 function renderItemProyeccion(p){
   const esIngreso=p.tipo==='ingreso';
-  const icono=esIngreso?'wallet':(p.esTarjeta?'card':'box');
-  const sub=p.tipo==='gasto'&&p.esTarjeta?'Con tarjeta de crédito · no resta este mes':'';
+  const esTarjetaNoResta=p.tipo==='gasto'&&p.esTarjeta;
+  const icono=esIngreso?'wallet':(esTarjetaNoResta?'card':'box');
+  const sub=esTarjetaNoResta?'Con tarjeta de crédito · no resta este mes':'';
+  const color=esIngreso?'':(esTarjetaNoResta?'':'color:var(--danger)');
   return`<div class="${esIngreso?'ingreso-item':'gasto-item'}" onclick="abrirModalProyeccion('${p.tipo}',${p.id})">
     <div class="ico">${ic(icono)}</div>
     <div class="info"><div class="desc">${p.desc||'(sin descripción)'}</div>${sub?`<div class="meta">${sub}</div>`:''}</div>
-    <div class="amount"${esIngreso?'':' style="color:var(--danger)"'}>${esIngreso?'':'-'}${fmt(p.monto,p.moneda)}</div>
+    <div class="amount"${color?` style="${color}"`:''}>${esIngreso||esTarjetaNoResta?'':'-'}${fmt(p.monto,p.moneda)}</div>
   </div>`;
 }
 
-// Cuotas de tarjeta activas en el ciclo de referencia (excluye pagos en débito).
+// Cuotas de tarjeta todavía activas en el ciclo del mes objetivo.
 function cuotasEnCiclo(refDate){
   return gastos.filter(g=>g.cuotas&&getTarjeta(g.pago).esTarjeta).map(g=>{
     const dc=cierres[g.pago]?.dia||31;
@@ -1341,34 +1341,41 @@ function renderProyeccion(){
   const ingresosItems=proyeccionItems.filter(p=>p.tipo==='ingreso'&&p.mes===mesKey);
   const totalIngresos=ingresosItems.reduce((a,p)=>a+montoArs(p),0);
 
-  // Lo que ya cerró en la tarjeta (ciclo anterior al objetivo) y hay que pagar este mes.
-  const cuotasAPagar=cuotasEnCiclo(cicloDateProyeccion(-1));
-  const subsTarjeta=subs.filter(s=>getTarjeta(s.pago).esTarjeta);
-  const subsDebito=subs.filter(s=>!getTarjeta(s.pago).esTarjeta);
-  const totalPagoTarjeta=cuotasAPagar.reduce((a,g)=>a+montoArs(g),0)+subsTarjeta.reduce((a,s)=>a+montoArs(s),0);
-  const totalDebito=subsDebito.reduce((a,s)=>a+montoArs(s),0);
-
-  // Lo que se sigue generando en la tarjeta durante el mes objetivo (se paga recién el mes que viene).
-  const cuotasEnCurso=cuotasEnCiclo(refDate);
-
   const gastosItems=proyeccionItems.filter(p=>p.tipo==='gasto'&&p.mes===mesKey);
   const gastosNoTarjeta=gastosItems.filter(p=>!p.esTarjeta);
-  const gastosTarjeta=gastosItems.filter(p=>p.esTarjeta);
   const totalGastosNoTarjeta=gastosNoTarjeta.reduce((a,p)=>a+montoArs(p),0);
-  const totalGastosTarjeta=gastosTarjeta.reduce((a,p)=>a+montoArs(p),0);
-  const totalEnCurso=cuotasEnCurso.reduce((a,g)=>a+montoArs(g),0)+totalGastosTarjeta;
 
-  const totalComprometido=totalPagoTarjeta+totalDebito;
-  const disponible=totalIngresos-totalComprometido-totalGastosNoTarjeta;
+  const disponible=totalIngresos-totalGastosNoTarjeta;
 
   const heroVal=document.getElementById('proy-disponible-val');
   const heroIng=document.getElementById('proy-ingresos-val');
   const heroCom=document.getElementById('proy-comprometido-val');
   if(heroVal)heroVal.textContent=fmt(disponible);
   if(heroIng)heroIng.textContent=fmt(totalIngresos);
-  if(heroCom)heroCom.textContent=fmt(totalComprometido+totalGastosNoTarjeta);
+  if(heroCom)heroCom.textContent=fmt(totalGastosNoTarjeta);
   const heroBox=document.getElementById('proy-hero');
   if(heroBox)heroBox.className='balance-hero'+(disponible<0?' negativo':' neutro');
+
+  // Cuotas y suscripciones activas para el mes objetivo (informativo, agrupado por medio de pago).
+  const cuotasActivas=cuotasEnCiclo(refDate);
+  const porMedio={};
+  const sumarMedio=(id,monto)=>{porMedio[id]=(porMedio[id]||0)+monto;};
+  cuotasActivas.forEach(g=>sumarMedio(g.pago,montoArs(g)));
+  subs.forEach(s=>sumarMedio(s.pago,montoArs(s)));
+
+  const breakdown=document.getElementById('proy-breakdown');
+  if(breakdown){
+    breakdown.innerHTML=tarjetas.length?tarjetas.map(t=>{
+      const total=porMedio[t.id]||0;
+      return`<div class="pago-row" style="--row-accent:${t.color}${total?'':';opacity:0.6'}">
+        <div class="row-top">
+          <div class="ico" style="background:${t.color}22">${ic(t.icono)}</div>
+          <div class="info"><div class="name">${t.nombre}</div><div class="detail">${t.esTarjeta?'Tarjeta de crédito':'Débito'} · no resta del disponible</div></div>
+          <div class="monto-grande" style="color:${t.color}">${fmt(total)}</div>
+        </div>
+      </div>`;
+    }).join(''):'<div style="font-size:13px;color:var(--muted)">Configurá tus medios de pago en Perfil</div>';
+  }
 
   const listaIng=document.getElementById('proy-ingresos-lista');
   if(listaIng){
@@ -1376,48 +1383,32 @@ function renderProyeccion(){
       `<div class="empty"><div class="ico">${ic('wallet')}</div><p style="font-weight:600;font-size:14px;margin-bottom:4px">Sin ingresos cargados</p><p style="font-size:13px">Sumá tu sueldo, horas extra o premios previstos.</p></div>`;
   }
 
-  const listaCom=document.getElementById('proy-comprometido-lista');
-  if(listaCom){
-    const itemsCom=[
-      ...cuotasAPagar.map(g=>({desc:g.desc,monto:montoArs(g),sub:`Cuota ${g.numCuota}/${g.cuotas} · ${getTarjeta(g.pago).nombre}`,icono:getCat(g.cat,'gasto').icono})),
-      ...subsTarjeta.map(s=>({desc:s.nombre,monto:montoArs(s),sub:`Suscripción · ${getTarjeta(s.pago).nombre}`,icono:getCat(s.cat,'sub').icono})),
-      ...subsDebito.map(s=>({desc:s.nombre,monto:montoArs(s),sub:`Suscripción · ${getTarjeta(s.pago).nombre}`,icono:getCat(s.cat,'sub').icono}))
-    ];
-    listaCom.innerHTML=itemsCom.length?itemsCom.map(it=>`
+  const listaCuotas=document.getElementById('proy-cuotas-lista');
+  if(listaCuotas){
+    listaCuotas.innerHTML=cuotasActivas.length?cuotasActivas.map(g=>`
       <div class="gasto-item">
-        <div class="ico">${ic(it.icono)}</div>
-        <div class="info"><div class="desc">${it.desc}</div><div class="meta">${it.sub}</div></div>
-        <div class="amount" style="color:var(--danger)">-${fmt(it.monto)}</div>
+        <div class="ico">${ic(getCat(g.cat,'gasto').icono)}</div>
+        <div class="info"><div class="desc">${g.desc}</div><div class="meta">Cuota ${g.numCuota}/${g.cuotas} · ${getTarjeta(g.pago).nombre}</div></div>
+        <div class="amount">${fmt(montoArs(g))}</div>
       </div>`).join(''):
-      `<div class="empty"><div class="ico">${ic('check-circle')}</div><p style="font-weight:600;font-size:14px">Nada para pagar todavía</p></div>`;
+      `<div class="empty"><div class="ico">${ic('check-circle')}</div><p style="font-weight:600;font-size:14px">Sin cuotas activas</p></div>`;
+  }
+
+  const listaSubs=document.getElementById('proy-subs-lista');
+  if(listaSubs){
+    listaSubs.innerHTML=subs.length?subs.map(s=>`
+      <div class="gasto-item">
+        <div class="ico">${ic(getCat(s.cat,'sub').icono)}</div>
+        <div class="info"><div class="desc">${s.nombre}</div><div class="meta">Suscripción · ${getTarjeta(s.pago).nombre}</div></div>
+        <div class="amount">${fmt(montoArs(s))}</div>
+      </div>`).join(''):
+      `<div class="empty"><div class="ico">${ic('check-circle')}</div><p style="font-weight:600;font-size:14px">Sin suscripciones</p></div>`;
   }
 
   const listaGas=document.getElementById('proy-gastos-lista');
   if(listaGas){
     listaGas.innerHTML=gastosItems.length?gastosItems.map(p=>renderItemProyeccion(p)).join(''):
-      `<div class="empty"><div class="ico">${ic('box')}</div><p style="font-weight:600;font-size:14px;margin-bottom:4px">Sin gastos planeados</p><p style="font-size:13px">Sumá compras o gastos que estás pensando hacer.</p></div>`;
-  }
-
-  const insight=document.getElementById('proy-tarjeta-futura');
-  const insightMonto=document.getElementById('proy-tarjeta-futura-monto');
-  const insightLista=document.getElementById('proy-tarjeta-futura-lista');
-  if(insight){
-    const itemsFuturos=[
-      ...cuotasEnCurso.map(g=>({desc:g.desc,monto:montoArs(g),sub:`Cuota ${g.numCuota}/${g.cuotas} · ${getTarjeta(g.pago).nombre}`,icono:getCat(g.cat,'gasto').icono})),
-      ...gastosTarjeta.map(p=>({desc:p.desc||'(sin descripción)',monto:montoArs(p),sub:'Compra planeada',icono:'card'}))
-    ];
-    if(itemsFuturos.length){
-      insight.style.display='block';
-      if(insightMonto)insightMonto.textContent=fmt(totalEnCurso);
-      if(insightLista)insightLista.innerHTML=itemsFuturos.map(it=>`
-        <div class="gasto-item">
-          <div class="ico">${ic(it.icono)}</div>
-          <div class="info"><div class="desc">${it.desc}</div><div class="meta">${it.sub}</div></div>
-          <div class="amount">${fmt(it.monto)}</div>
-        </div>`).join('');
-    }else{
-      insight.style.display='none';
-    }
+      `<div class="empty"><div class="ico">${ic('box')}</div><p style="font-weight:600;font-size:14px;margin-bottom:4px">Sin gastos planeados</p><p style="font-size:13px">Sumá compras o gastos que estás pensando hacer, o el pago de la tarjeta del mes pasado.</p></div>`;
   }
 }
 
