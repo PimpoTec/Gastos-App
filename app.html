@@ -503,6 +503,18 @@
         </div>
       </div>
     </div>
+    <!-- Header proyección -->
+    <div id="header-hero-proyeccion" style="display:none">
+      <div class="balance-hero neutro" id="proy-hero" style="margin-bottom:0;border-radius:14px">
+        <div class="lbl">Disponible proyectado</div>
+        <div class="val" id="proy-disponible-val">$0</div>
+        <div class="sub" id="proy-mes-label">—</div>
+        <div class="balance-row">
+          <div class="balance-mini"><div class="lbl">Ingresos</div><div class="val" id="proy-ingresos-val">$0</div></div>
+          <div class="balance-mini"><div class="lbl">Comprometido</div><div class="val" id="proy-comprometido-val">$0</div></div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div class="content">
@@ -566,6 +578,33 @@
         <div class="sub">No forma parte de tu balance del mes</div>
       </div>
       <div id="ahorro-lista"></div>
+    </div>
+
+    <!-- PROYECCIÓN -->
+    <div class="panel" id="panel-proyeccion">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <button onclick="cambiarMesProyeccion(-1)" style="background:var(--card);border:1px solid var(--border-2);color:var(--text);padding:6px 12px;border-radius:99px;cursor:pointer;font-size:13px;font-weight:600">← Anterior</button>
+        <span id="proy-mes-nav-label" style="font-size:13px;font-weight:600;color:var(--muted-2)">—</span>
+        <button onclick="cambiarMesProyeccion(1)" style="background:var(--card);border:1px solid var(--border-2);color:var(--text);padding:6px 12px;border-radius:99px;cursor:pointer;font-size:13px;font-weight:600">Siguiente →</button>
+      </div>
+      <p style="font-size:12.5px;color:var(--muted);margin-bottom:16px;line-height:1.5">Simulá cómo te va a quedar la plata este mes. No afecta tus gastos e ingresos reales.</p>
+
+      <div class="section-title" style="margin-top:4px">Ingresos proyectados <button class="btn-cfg" onclick="abrirModalProyeccion('ingreso')">+ Agregar</button></div>
+      <div id="proy-ingresos-lista"></div>
+
+      <div class="section-title">Ya comprometido</div>
+      <div id="proy-comprometido-lista"></div>
+
+      <div class="section-title">Gastos que planeás <button class="btn-cfg" onclick="abrirModalProyeccion('gasto')">+ Agregar</button></div>
+      <div id="proy-gastos-lista"></div>
+
+      <div class="insight-card" id="proy-tarjeta-futura" style="display:none;margin-top:14px">
+        <div class="insight-top">
+          <div class="insight-eyebrow"><svg class="icon icon-sm"><use href="#i-card"></use></svg> Compras planeadas con tarjeta</div>
+        </div>
+        <div class="insight-title" id="proy-tarjeta-futura-monto"></div>
+        <p class="insight-body">No restan de este mes — van a aparecer en el resumen de tu tarjeta cuando las hagas.</p>
+      </div>
     </div>
 
     <!-- PERFIL -->
@@ -646,6 +685,9 @@
     </button>
     <button class="nav-btn" id="nav-balance" onclick="switchTab('balance')">
       <svg viewBox="0 0 24 24"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>Balance
+    </button>
+    <button class="nav-btn" id="nav-proyeccion" onclick="switchTab('proyeccion')">
+      <svg viewBox="0 0 24 24"><path d="M4 17l5-5 4 3 7-8"/><path d="M15 4h5v5" stroke-dasharray="2.5 2.5"/></svg>Proyección
     </button>
   </nav>
 </div>
@@ -836,6 +878,29 @@
     <div class="field"><label>Fecha</label><input type="date" id="a-fecha"></div>
     <button class="btn-submit btn-success" id="btn-save-ahorro" onclick="submitAhorro()">Guardar movimiento</button>
     <button class="btn-submit btn-danger" id="btn-del-ahorro" style="display:none" onclick="eliminarAhorroActual()">Eliminar</button>
+  </div>
+</div>
+
+<!-- Modal Proyección -->
+<div class="modal-overlay" id="modal-proyeccion">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="modal-proyeccion-title">Nuevo ingreso proyectado</div>
+    <input type="hidden" id="py-id">
+    <input type="hidden" id="py-tipo">
+    <div class="field"><label>Monto</label>
+      <div class="amount-wrap">
+        <input type="number" id="py-monto" class="amount-input" placeholder="0" inputmode="decimal">
+        <select class="moneda-select" id="py-moneda"><option value="ARS">$ ARS</option><option value="USD">U$ USD</option></select>
+      </div>
+    </div>
+    <div class="field"><label>Descripción</label><input type="text" id="py-desc" placeholder="Ej: Sueldo, horas extra, notebook nueva..." maxlength="60"></div>
+    <div class="field" id="py-tarjeta-wrap" style="display:none">
+      <label class="checkbox-wrap"><input type="checkbox" id="py-es-tarjeta"> Lo voy a pagar con tarjeta de crédito</label>
+      <p style="font-size:12px;color:var(--muted);margin-top:6px;line-height:1.5">No resta de este mes: va a aparecer en el resumen de la tarjeta cuando lo hagas.</p>
+    </div>
+    <button class="btn-submit" id="btn-save-proyeccion" onclick="guardarProyeccionItem()">Guardar</button>
+    <button class="btn-submit btn-danger" id="btn-del-proyeccion" style="display:none" onclick="eliminarProyeccionItem()">Eliminar</button>
   </div>
 </div>
 
@@ -1225,6 +1290,168 @@ async function dbCargarAhorros(){
 }
 async function dbUpsertAhorro(a){await sb.from('ahorros_movimientos').upsert({id:a.id,user_id:currentUser.id,monto:a.monto,tipo:a.tipo,descripcion:a.desc,fecha:a.fecha});}
 async function dbDeleteAhorro(id){await sb.from('ahorros_movimientos').delete().eq('id',id).eq('user_id',currentUser.id);}
+async function dbCargarProyeccion(){
+  const{data,error}=await sb.from('proyeccion_items').select('*').eq('user_id',currentUser.id);
+  if(error){console.error('Error cargando proyección:',error);return[];}
+  return data.map(p=>({id:p.id,mes:p.mes,tipo:p.tipo,desc:p.descripcion||'',monto:parseFloat(p.monto),moneda:p.moneda||'ARS',esTarjeta:p.es_tarjeta||false}));
+}
+async function dbUpsertProyeccionItem(p){await sb.from('proyeccion_items').upsert({id:p.id,user_id:currentUser.id,mes:p.mes,tipo:p.tipo,descripcion:p.desc,monto:p.monto,moneda:p.moneda||'ARS',es_tarjeta:p.esTarjeta||false});}
+async function dbDeleteProyeccionItem(id){await sb.from('proyeccion_items').delete().eq('id',id).eq('user_id',currentUser.id);}
+
+// ── Proyección ───────────────────────────────────────
+function targetDateProyeccion(){const d=new Date();d.setDate(20);d.setMonth(d.getMonth()+mesOffsetProyeccion);return d;}
+function mesKeyProyeccion(){const d=targetDateProyeccion();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
+
+function cambiarMesProyeccion(delta){mesOffsetProyeccion+=delta;renderProyeccion();}
+
+function renderItemProyeccion(p){
+  const esIngreso=p.tipo==='ingreso';
+  const icono=esIngreso?'wallet':(p.esTarjeta?'card':'box');
+  const sub=p.tipo==='gasto'&&p.esTarjeta?'Con tarjeta de crédito · no resta este mes':'';
+  return`<div class="${esIngreso?'ingreso-item':'gasto-item'}" onclick="abrirModalProyeccion('${p.tipo}',${p.id})">
+    <div class="ico">${ic(icono)}</div>
+    <div class="info"><div class="desc">${p.desc||'(sin descripción)'}</div>${sub?`<div class="meta">${sub}</div>`:''}</div>
+    <div class="amount"${esIngreso?'':' style="color:var(--danger)"'}>${esIngreso?'':'-'}${fmt(p.monto,p.moneda)}</div>
+  </div>`;
+}
+
+function renderProyeccion(){
+  const montoArs=g=>g.moneda==='USD'?(dolarBlue>0?g.monto*dolarBlue:0):g.monto;
+  const mesKey=mesKeyProyeccion();
+  const refDate=targetDateProyeccion();
+  const label=refDate.toLocaleDateString('es-AR',{month:'long',year:'numeric'});
+  const labelCap=label.charAt(0).toUpperCase()+label.slice(1);
+  const labelEl=document.getElementById('proy-mes-label');
+  const navLabelEl=document.getElementById('proy-mes-nav-label');
+  if(labelEl)labelEl.textContent=labelCap;
+  if(navLabelEl)navLabelEl.textContent=labelCap;
+
+  const ingresosItems=proyeccionItems.filter(p=>p.tipo==='ingreso'&&p.mes===mesKey);
+  const totalIngresos=ingresosItems.reduce((a,p)=>a+montoArs(p),0);
+
+  const cuotasActivas=gastos.filter(g=>g.cuotas).map(g=>{
+    const dc=cierres[g.pago]?.dia||31;
+    const n=calcularCuotaActual(g.fecha,dc,refDate);
+    return{...g,numCuota:n};
+  }).filter(g=>g.numCuota>=1&&g.numCuota<=g.cuotas);
+  const totalCuotas=cuotasActivas.reduce((a,g)=>a+montoArs(g),0);
+
+  const totalSubs=subs.reduce((a,s)=>a+montoArs(s),0);
+  const totalComprometido=totalCuotas+totalSubs;
+
+  const gastosItems=proyeccionItems.filter(p=>p.tipo==='gasto'&&p.mes===mesKey);
+  const gastosNoTarjeta=gastosItems.filter(p=>!p.esTarjeta);
+  const gastosTarjeta=gastosItems.filter(p=>p.esTarjeta);
+  const totalGastosNoTarjeta=gastosNoTarjeta.reduce((a,p)=>a+montoArs(p),0);
+  const totalGastosTarjeta=gastosTarjeta.reduce((a,p)=>a+montoArs(p),0);
+
+  const disponible=totalIngresos-totalComprometido-totalGastosNoTarjeta;
+
+  const heroVal=document.getElementById('proy-disponible-val');
+  const heroIng=document.getElementById('proy-ingresos-val');
+  const heroCom=document.getElementById('proy-comprometido-val');
+  if(heroVal)heroVal.textContent=fmt(disponible);
+  if(heroIng)heroIng.textContent=fmt(totalIngresos);
+  if(heroCom)heroCom.textContent=fmt(totalComprometido);
+  const heroBox=document.getElementById('proy-hero');
+  if(heroBox)heroBox.className='balance-hero'+(disponible<0?' negativo':' neutro');
+
+  const listaIng=document.getElementById('proy-ingresos-lista');
+  if(listaIng){
+    listaIng.innerHTML=ingresosItems.length?ingresosItems.map(p=>renderItemProyeccion(p)).join(''):
+      `<div class="empty"><div class="ico">${ic('wallet')}</div><p style="font-weight:600;font-size:14px;margin-bottom:4px">Sin ingresos cargados</p><p style="font-size:13px">Sumá tu sueldo, horas extra o premios previstos.</p></div>`;
+  }
+
+  const listaCom=document.getElementById('proy-comprometido-lista');
+  if(listaCom){
+    const itemsCom=[
+      ...cuotasActivas.map(g=>({desc:g.desc,monto:montoArs(g),sub:`Cuota ${g.numCuota}/${g.cuotas} · ${getTarjeta(g.pago).nombre}`,icono:getCat(g.cat,'gasto').icono})),
+      ...subs.map(s=>({desc:s.nombre,monto:montoArs(s),sub:`Suscripción · ${getTarjeta(s.pago).nombre}`,icono:getCat(s.cat,'sub').icono}))
+    ];
+    listaCom.innerHTML=itemsCom.length?itemsCom.map(it=>`
+      <div class="gasto-item">
+        <div class="ico">${ic(it.icono)}</div>
+        <div class="info"><div class="desc">${it.desc}</div><div class="meta">${it.sub}</div></div>
+        <div class="amount" style="color:var(--danger)">-${fmt(it.monto)}</div>
+      </div>`).join(''):
+      `<div class="empty"><div class="ico">${ic('check-circle')}</div><p style="font-weight:600;font-size:14px">Nada comprometido todavía</p></div>`;
+  }
+
+  const listaGas=document.getElementById('proy-gastos-lista');
+  if(listaGas){
+    listaGas.innerHTML=gastosItems.length?gastosItems.map(p=>renderItemProyeccion(p)).join(''):
+      `<div class="empty"><div class="ico">${ic('box')}</div><p style="font-weight:600;font-size:14px;margin-bottom:4px">Sin gastos planeados</p><p style="font-size:13px">Sumá compras o gastos que estás pensando hacer.</p></div>`;
+  }
+
+  const insight=document.getElementById('proy-tarjeta-futura');
+  const insightMonto=document.getElementById('proy-tarjeta-futura-monto');
+  if(insight){
+    if(gastosTarjeta.length){
+      insight.style.display='block';
+      if(insightMonto)insightMonto.textContent=fmt(totalGastosTarjeta);
+    }else{
+      insight.style.display='none';
+    }
+  }
+}
+
+function abrirModalProyeccion(tipo,id=null){
+  selTipoProyeccion=tipo;
+  const titulo=document.getElementById('modal-proyeccion-title');
+  const btnDel=document.getElementById('btn-del-proyeccion');
+  const btnSave=document.getElementById('btn-save-proyeccion');
+  const wrapTarjeta=document.getElementById('py-tarjeta-wrap');
+  document.getElementById('py-tipo').value=tipo;
+  wrapTarjeta.style.display=tipo==='gasto'?'block':'none';
+  if(id){
+    const p=proyeccionItems.find(x=>x.id===id);
+    if(!p)return;
+    document.getElementById('py-id').value=id;
+    document.getElementById('py-monto').value=p.monto;
+    document.getElementById('py-desc').value=p.desc;
+    document.getElementById('py-moneda').value=p.moneda||'ARS';
+    document.getElementById('py-es-tarjeta').checked=p.esTarjeta||false;
+    titulo.textContent=tipo==='ingreso'?'Editar ingreso proyectado':'Editar gasto planeado';
+    btnSave.textContent='Guardar cambios';
+    btnDel.style.display='block';
+  }else{
+    document.getElementById('py-id').value='';
+    document.getElementById('py-monto').value='';
+    document.getElementById('py-desc').value='';
+    document.getElementById('py-moneda').value='ARS';
+    document.getElementById('py-es-tarjeta').checked=false;
+    titulo.textContent=tipo==='ingreso'?'Nuevo ingreso proyectado':'Nuevo gasto planeado';
+    btnSave.textContent='Guardar';
+    btnDel.style.display='none';
+  }
+  openModalWithHistory('modal-proyeccion');
+}
+
+async function guardarProyeccionItem(){
+  const pyId=document.getElementById('py-id').value;
+  const tipo=document.getElementById('py-tipo').value;
+  const monto=parseFloat(document.getElementById('py-monto').value);
+  const desc=document.getElementById('py-desc').value.trim();
+  const moneda=document.getElementById('py-moneda').value;
+  const esTarjeta=tipo==='gasto'&&document.getElementById('py-es-tarjeta').checked;
+  if(isNaN(monto)||monto<=0){err('py-monto');return;}
+  if(!desc){err('py-desc');return;}
+  const btn=document.getElementById('btn-save-proyeccion');btn.disabled=true;btn.textContent='Guardando...';
+  const newP={id:pyId?parseInt(pyId):Date.now(),mes:mesKeyProyeccion(),tipo,desc,monto,moneda,esTarjeta};
+  await dbUpsertProyeccionItem(newP);
+  if(pyId)proyeccionItems=proyeccionItems.map(x=>x.id==pyId?newP:x);else proyeccionItems.unshift(newP);
+  btn.disabled=false;btn.textContent='Guardar';
+  closeModals();renderProyeccion();
+}
+
+async function eliminarProyeccionItem(){
+  const id=document.getElementById('py-id').value;if(!id)return;
+  const btn=document.getElementById('btn-del-proyeccion');btn.disabled=true;btn.textContent='Eliminando...';
+  await dbDeleteProyeccionItem(parseInt(id));
+  proyeccionItems=proyeccionItems.filter(p=>p.id!=id);
+  btn.disabled=false;closeModals();renderProyeccion();
+}
+
 async function dbCargarConfig(){
   const{data}=await sb.from('config').select('cierres, notif_config, dolar_blue, dolar_updated, presupuesto_mensual, biometric_enabled, pin_hash, pin_salt').eq('user_id',currentUser.id).maybeSingle();
   return {
@@ -1308,7 +1535,8 @@ async function dbUpsertCat(c){await sb.from('categorias').upsert({id:c.id,user_i
 async function dbDeleteCat(id){await sb.from('categorias').delete().eq('id',id).eq('user_id',currentUser.id);}
 
 // ── Estado ───────────────────────────────────────────
-let gastos=[],subs=[],ingresos=[],pagosSubs=[],cierres={},notifConfig={},tarjetas=[],cats=[],ahorros=[];
+let gastos=[],subs=[],ingresos=[],pagosSubs=[],cierres={},notifConfig={},tarjetas=[],cats=[],ahorros=[],proyeccionItems=[];
+let mesOffsetProyeccion=1,selTipoProyeccion='ingreso';
 let dolarBlue=0, presupuestoMensual=0, mesOffset=0; // mesOffset: 0=este mes, -1=mes anterior, -2=hace 2 meses
 let biometricEnabled=false;
 let pinHash=null,pinSalt=null;
@@ -1379,12 +1607,12 @@ function switchTab(tab){
   document.getElementById('panel-'+tab).classList.add('active');
   const nb=document.getElementById('nav-'+tab);if(nb)nb.classList.add('active');
   // Mostrar header correcto
-  ['gastos','cuotas','subs','balance'].forEach(t=>{
+  ['gastos','cuotas','subs','balance','proyeccion'].forEach(t=>{
     const el=document.getElementById('header-hero-'+t);
     if(el) el.style.display = t===tab ? '' : 'none';
   });
   const fab=document.getElementById('fab-btn');
-  if(tab==='perfil'){
+  if(tab==='perfil'||tab==='proyeccion'){
     fab.style.display='none';
   }else{
     fab.style.display='flex';
@@ -1399,6 +1627,7 @@ function switchTab(tab){
   if(tab==='perfil') renderPerfil();
   if(tab==='balance'){renderBalance();renderAhorros();}
   if(tab==='cuotas') renderCuotasTabs();
+  if(tab==='proyeccion') renderProyeccion();
 }
 
 function toggleSearch(){
@@ -2841,8 +3070,8 @@ async function initPushNotifications() {
       await esperarDesbloqueo();
       showLoading('Cargando datos...');
     }
-    [gastos,subs,ingresos,tarjetas,cats,pagosSubs,ahorros]=await Promise.all([
-      dbCargarGastos(),dbCargarSubs(),dbCargarIngresos(),dbCargarTarjetas(),dbCargarCats(),dbCargarPagosSubs(),dbCargarAhorros()
+    [gastos,subs,ingresos,tarjetas,cats,pagosSubs,ahorros,proyeccionItems]=await Promise.all([
+      dbCargarGastos(),dbCargarSubs(),dbCargarIngresos(),dbCargarTarjetas(),dbCargarCats(),dbCargarPagosSubs(),dbCargarAhorros(),dbCargarProyeccion()
     ]);
     actualizarDolarSiNecesario(configData.dolarUpdated);
     hideLoading();
