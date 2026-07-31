@@ -927,7 +927,7 @@
     </div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
       <button onclick="cambiarPeriodoDetalle(-1)" style="background:var(--card);border:1px solid var(--border-2);color:var(--text);padding:6px 12px;border-radius:99px;cursor:pointer;font-size:13px;font-weight:600">← Anterior</button>
-      <span id="dt-total" style="font-size:20px;font-weight:800">$0</span>
+      <span id="dt-total" style="font-size:20px;font-weight:800;text-align:center;line-height:1.25">$0</span>
       <button id="dt-btn-siguiente" onclick="cambiarPeriodoDetalle(1)" style="background:var(--card);border:1px solid var(--border-2);color:var(--text);padding:6px 12px;border-radius:99px;cursor:pointer;font-size:13px;font-weight:600">Siguiente →</button>
     </div>
     <div id="dt-lista"></div>
@@ -2454,8 +2454,7 @@ function renderDetalleTarjeta(){
   document.getElementById('dt-periodo').textContent=`${strDesde} → ${strHasta}`;
 
   const{items,ars,usd}=gastosPeriodoTarjeta(detalleTarjetaId,cfg,desde,hasta);
-  const usdEnArs=dolarBlue>0?usd*dolarBlue:0;
-  document.getElementById('dt-total').textContent=fmt(ars+usdEnArs)+(usd>0?` + ${fmt(usd,'USD')}`:'');
+  document.getElementById('dt-total').innerHTML=fmt(ars)+(usd>0?`<div style="font-size:14px;font-weight:600;opacity:0.8;margin-top:2px">${fmt(usd,'USD')}${dolarBlue>0?` (≈${fmt(usd*dolarBlue)})`:''}</div>`:'');
 
   const lista=document.getElementById('dt-lista');
   lista.innerHTML=items.length?items.map(it=>{
