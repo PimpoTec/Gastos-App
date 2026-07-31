@@ -914,6 +914,26 @@
   </div>
 </div>
 
+<!-- Modal Detalle de tarjeta -->
+<div class="modal-overlay" id="modal-detalle-tarjeta">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+      <div class="ico" id="dt-ico" style="width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0"></div>
+      <div style="flex:1;min-width:0">
+        <div class="modal-title" id="dt-nombre" style="margin-bottom:2px">Tarjeta</div>
+        <div style="font-size:12px;color:var(--muted)" id="dt-periodo">—</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <button onclick="cambiarPeriodoDetalle(-1)" style="background:var(--card);border:1px solid var(--border-2);color:var(--text);padding:6px 12px;border-radius:99px;cursor:pointer;font-size:13px;font-weight:600">← Anterior</button>
+      <span id="dt-total" style="font-size:20px;font-weight:800">$0</span>
+      <button id="dt-btn-siguiente" onclick="cambiarPeriodoDetalle(1)" style="background:var(--card);border:1px solid var(--border-2);color:var(--text);padding:6px 12px;border-radius:99px;cursor:pointer;font-size:13px;font-weight:600">Siguiente →</button>
+    </div>
+    <div id="dt-lista"></div>
+  </div>
+</div>
+
 <!-- Modal Nombre -->
 <div class="modal-overlay" id="modal-nombre">
   <div class="modal">
@@ -1554,6 +1574,7 @@ async function dbDeleteCat(id){await sb.from('categorias').delete().eq('id',id).
 // ── Estado ───────────────────────────────────────────
 let gastos=[],subs=[],ingresos=[],pagosSubs=[],cierres={},notifConfig={},tarjetas=[],cats=[],ahorros=[],proyeccionItems=[];
 let mesOffsetProyeccion=1,selTipoProyeccion='ingreso';
+let detalleTarjetaId=null,offsetPeriodoDetalle=0;
 let dolarBlue=0, presupuestoMensual=0, mesOffset=0; // mesOffset: 0=este mes, -1=mes anterior, -2=hace 2 meses
 let biometricEnabled=false;
 let pinHash=null,pinSalt=null;
@@ -2318,7 +2339,7 @@ function renderDashboard(){
   const tCred=tarjetas.filter(t=>t.esTarjeta);
   if(!tCred.length){c.innerHTML='<div style="font-size:13px;color:var(--muted)">Configurá tus tarjetas en Perfil</div>';return;}
   c.innerHTML=tCred.map(t=>{
-    if(!cierres[t.id])return`<div class="pago-row" style="--row-accent:${t.color};opacity:0.6"><div class="row-top"><div class="ico" style="background:${t.color}22">${ic(t.icono)}</div><div class="info"><div class="name">${t.nombre}</div><div class="detail" style="color:var(--warning)">${ic('gear','icon-sm')} Configurar cierre y límite</div></div></div></div>`;
+    if(!cierres[t.id])return`<div class="pago-row" style="--row-accent:${t.color};opacity:0.6;cursor:pointer" onclick="openCierres()"><div class="row-top"><div class="ico" style="background:${t.color}22">${ic(t.icono)}</div><div class="info"><div class="name">${t.nombre}</div><div class="detail" style="color:var(--warning)">${ic('gear','icon-sm')} Configurar cierre y límite</div></div></div></div>`;
     const cfg=cierres[t.id];
     const {ars,usd}=getGastosPeriodoActual(t.id,gastos);
     const usdEnArs=dolarBlue>0?usd*dolarBlue:0;
@@ -2347,7 +2368,7 @@ function renderDashboard(){
     else detalleTexto+=`${fmt(ars)} gastado`;
     if(interes>0) detalleTexto+=` + ${fmt(interes)} interés`;
     detalleTexto+=` = <strong style="color:var(--text)">${fmt(totalConInteres)}</strong>`;
-    return`<div class="pago-row" style="--row-accent:${t.color}">
+    return`<div class="pago-row" style="--row-accent:${t.color};cursor:pointer" onclick="abrirDetalleTarjeta(${t.id})">
       <div class="row-top">
         <div class="ico" style="background:${t.color}22">${ic(t.icono)}</div>
         <div class="info">
@@ -2363,6 +2384,91 @@ function renderDashboard(){
       <div class="cierre-info"><span style="${alertC}">${txtC}</span><span style="text-align:right;font-size:11px;color:var(--muted)">${detalleTexto}</span></div>
     </div>`;
   }).join('');
+}
+
+// ── Detalle de tarjeta (histórico por período) ───────
+function refDetalleTarjeta(offset){const d=new Date();d.setMonth(d.getMonth()+offset);return d;}
+
+function gastosPeriodoTarjeta(tId,cfg,desde,hasta){
+  const items=[];
+  let ars=0,usd=0;
+  gastos.filter(g=>g.pago==tId).forEach(g=>{
+    let incluir,cuotaInfo=null;
+    if(g.cuotas){
+      const fCompra=new Date(g.fecha+'T00:00:00');
+      const n=calcularCuotaActual(g.fecha,cfg.dia,hasta);
+      incluir=fCompra<=hasta&&n>=1&&n<=g.cuotas;
+      if(incluir)cuotaInfo={n,total:g.cuotas};
+    }else{
+      const fd=new Date(g.fecha+'T00:00:00');
+      incluir=fd>=desde&&fd<=hasta;
+    }
+    if(!incluir)return;
+    items.push({tipo:'gasto',id:g.id,desc:g.desc,cat:g.cat,fecha:g.fecha,monto:g.monto,moneda:g.moneda,cuotaInfo});
+    if(g.moneda==='USD')usd+=g.monto;else ars+=g.monto;
+  });
+  subs.filter(s=>String(s.pago)===String(tId)).forEach(s=>{
+    let fSub=new Date(hasta.getFullYear(),hasta.getMonth(),s.dia);
+    if(s.dia>hasta.getDate())fSub=new Date(desde.getFullYear(),desde.getMonth(),s.dia);
+    if(fSub<desde||fSub>hasta)return;
+    const subMes=fSub.getMonth()+1,subAnio=fSub.getFullYear();
+    const pagada=pagosSubs.find(p=>p.sub_id===s.id&&p.mes===subMes&&p.anio===subAnio&&p.pagado===true);
+    if(!pagada)return;
+    items.push({tipo:'sub',id:s.id,desc:s.nombre,cat:s.cat,fecha:fSub.toISOString().split('T')[0],monto:s.monto,moneda:s.moneda,cuotaInfo:null});
+    if(s.moneda==='USD')usd+=s.monto;else ars+=s.monto;
+  });
+  items.sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
+  return{items,ars,usd};
+}
+
+function abrirDetalleTarjeta(tId){
+  detalleTarjetaId=tId;offsetPeriodoDetalle=0;
+  renderDetalleTarjeta();
+  openModalWithHistory('modal-detalle-tarjeta');
+}
+
+function cambiarPeriodoDetalle(delta){
+  if(offsetPeriodoDetalle+delta>0)return;
+  offsetPeriodoDetalle+=delta;
+  renderDetalleTarjeta();
+}
+
+function renderDetalleTarjeta(){
+  const t=getTarjeta(detalleTarjetaId);
+  const cfg=cierres[detalleTarjetaId];
+  const icoEl=document.getElementById('dt-ico');
+  if(icoEl){icoEl.style.background=t.color+'22';icoEl.innerHTML=ic(t.icono);}
+  document.getElementById('dt-nombre').textContent=t.nombre;
+  const btnSig=document.getElementById('dt-btn-siguiente');
+  if(btnSig)btnSig.style.visibility=offsetPeriodoDetalle>=0?'hidden':'visible';
+  if(!cfg?.dia){
+    document.getElementById('dt-periodo').textContent='Configurá el día de cierre en Perfil';
+    document.getElementById('dt-total').textContent='$0';
+    document.getElementById('dt-lista').innerHTML='';
+    return;
+  }
+  const ref=refDetalleTarjeta(offsetPeriodoDetalle);
+  const desde=inicioPeriodo(cfg,ref),hasta=proximoCierreFecha(cfg.dia,ref);
+  const strDesde=desde.toLocaleDateString('es-AR',{day:'numeric',month:'short'});
+  const strHasta=hasta.toLocaleDateString('es-AR',{day:'numeric',month:'short',year:'numeric'});
+  document.getElementById('dt-periodo').textContent=`${strDesde} → ${strHasta}`;
+
+  const{items,ars,usd}=gastosPeriodoTarjeta(detalleTarjetaId,cfg,desde,hasta);
+  const usdEnArs=dolarBlue>0?usd*dolarBlue:0;
+  document.getElementById('dt-total').textContent=fmt(ars+usdEnArs)+(usd>0?` + ${fmt(usd,'USD')}`:'');
+
+  const lista=document.getElementById('dt-lista');
+  lista.innerHTML=items.length?items.map(it=>{
+    const c=it.tipo==='sub'?getCat(it.cat,'sub'):getCat(it.cat,'gasto');
+    const fl=new Date(it.fecha+'T00:00:00').toLocaleDateString('es-AR',{day:'numeric',month:'short'});
+    const meta=it.cuotaInfo?`Cuota ${it.cuotaInfo.n}/${it.cuotaInfo.total} · ${fl}`:(it.tipo==='sub'?`Suscripción · ${fl}`:fl);
+    const abrir=it.tipo==='sub'?`closeModals();openModalSub(${it.id})`:`closeModals();openModalGasto(${it.id})`;
+    return`<div class="gasto-item" onclick="${abrir}">
+      <div class="ico" style="background:${c.color}22">${ic(c.icono)}</div>
+      <div class="info"><div class="desc">${it.desc}</div><div class="meta">${meta}</div></div>
+      <div class="amount">${fmt(it.monto,it.moneda)}</div>
+    </div>`;
+  }).join(''):`<div class="empty"><div class="ico">${ic('check-circle')}</div><p style="font-weight:600;font-size:14px">Sin gastos en este período</p></div>`;
 }
 
 function renderCuotasTabs(){
