@@ -48,7 +48,7 @@
     @keyframes float{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-18px) scale(1.06)}}
 
     /* ── Header ── */
-    .header{padding:10px 16px 10px;padding-top:calc(env(safe-area-inset-top,0px) + 10px);background:rgba(12,19,36,0.75);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:1px solid var(--border);position:fixed;top:0;left:0;right:0;z-index:40}
+    .header{margin:-14px -16px 14px -16px;padding:10px 16px 10px;padding-top:calc(env(safe-area-inset-top,0px) + 10px);background:rgba(12,19,36,0.75);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:1px solid var(--border)}
     .header-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
     .header h1{font-size:20px;font-weight:800;letter-spacing:-0.5px;color:var(--text)}
     .header h1 span{color:var(--accent)}
@@ -69,7 +69,7 @@
     .hero-mini .val{font-size:17px;font-weight:800;color:rgba(255,255,255,0.95);letter-spacing:-0.3px}
 
     /* ── Layout ── */
-    .content{position:fixed;top:0;left:0;right:0;bottom:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:14px 16px;padding-top:72px;padding-bottom:72px}
+    .content{position:fixed;top:0;left:0;right:0;bottom:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:14px 16px;padding-bottom:72px}
     .bottom-nav{display:flex;align-items:center;background:rgba(12,19,36,0.82);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-top:1px solid var(--border-2);border-radius:20px 20px 0 0;padding-bottom:env(safe-area-inset-bottom,4px);position:fixed;bottom:0;left:0;right:0;z-index:50;box-shadow:var(--shadow-md)}
     @media (display-mode: standalone) {
       .bottom-nav{padding-bottom:env(safe-area-inset-bottom,4px)}
@@ -355,10 +355,9 @@
         width:100%;padding:12px 14px;border-radius:12px;font-size:14px;text-align:left;margin:0!important;transform:none!important}
       .nav-btn svg{width:20px;height:20px;flex-shrink:0}
 
-      /* Header y contenido ocupan el resto del ancho, a la derecha del sidebar */
-      .header,.content{left:232px;right:0;width:auto}
-      .header{padding:24px 40px 16px}
-      .content{padding:24px 40px 40px}
+      /* Contenido ocupa el resto del ancho, a la derecha del sidebar */
+      .content{left:232px;right:0;width:auto;padding:24px 40px 40px}
+      .header{margin:-24px -40px 20px -40px;padding:24px 40px 16px}
       .header-row{max-width:640px;margin:0 auto 14px}
       .header [id^="header-hero-"]{max-width:640px;margin:0 auto}
       .panel{max-width:640px;margin:0 auto}
@@ -465,6 +464,7 @@
 <div class="bg-blobs"><div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div></div>
 
 <div class="app">
+  <div class="content">
   <div class="header">
     <div class="header-row">
       <h1><svg class="icon icon-lg" style="color:var(--accent)"><use href="#i-logo"></use></svg> Mis <span>Gastos</span></h1>
@@ -548,13 +548,11 @@
       </div>
     </div>
   </div>
-
-  <div class="content">
     <!-- GASTOS -->
     <div class="panel active" id="panel-gastos">
-      <div id="pendientes-cobro-wrap" style="display:none">
-        <div class="section-title" style="margin-top:4px;color:var(--success)"><svg class="icon icon-sm"><use href="#i-transfer"></use></svg> Pendientes de cobro</div>
-        <div id="pendientes-cobro-list" style="margin-bottom:20px"></div>
+      <div id="pendientes-cobro-wrap" style="display:none;margin-bottom:20px">
+        <div id="pendientes-cobro-banner" class="ingreso-item" style="align-items:center;margin-bottom:0" onclick="togglePendientesCobro()"></div>
+        <div id="pendientes-cobro-list" class="collapsible-hidden" style="margin-top:8px"></div>
       </div>
       <div class="section-title" id="tarjetas-title" style="margin-top:4px">Tarjetas <button class="btn-cfg" onclick="openCierres()"><svg class="icon icon-sm"><use href="#i-gear"></use></svg> Cierres y límites</button></div>
       <div class="pago-breakdown" id="pago-breakdown"></div>
@@ -1660,12 +1658,10 @@ function calcularCuotaActual(fechaCompra,diaCierre,fechaReferencia=null){
 let cuotasTarjetaSel = null; // tarjeta seleccionada en cuotas
 
 function ajustarLayout(){
-  const header=document.querySelector('.header');
   const nav=document.querySelector('.bottom-nav');
   const content=document.querySelector('.content');
-  if(header&&nav&&content){
+  if(nav&&content){
     const esEscritorio=window.innerWidth>=900;
-    content.style.paddingTop=(header.offsetHeight+8)+'px';
     content.style.paddingBottom=esEscritorio?'24px':(nav.offsetHeight+8)+'px';
   }
 }
@@ -2196,17 +2192,27 @@ function renderAll(){
   const b=document.getElementById('buscador-gastos');if(b)b.style.display='block';
 }
 
+let pendientesCobroExpanded=false;
+function togglePendientesCobro(){pendientesCobroExpanded=!pendientesCobroExpanded;renderPendientesCobro();}
+
 function renderPendientesCobro(){
   const wrap=document.getElementById('pendientes-cobro-wrap');
+  const banner=document.getElementById('pendientes-cobro-banner');
   const lista=document.getElementById('pendientes-cobro-list');
   const tituloTarjetas=document.getElementById('tarjetas-title');
-  if(!wrap||!lista)return;
+  if(!wrap||!banner||!lista)return;
   const pendientes=gastos.filter(g=>g.esReembolsable&&!g.cobrado).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
   if(!pendientes.length){wrap.style.display='none';if(tituloTarjetas)tituloTarjetas.style.marginTop='4px';return;}
   wrap.style.display='block';
   if(tituloTarjetas)tituloTarjetas.style.marginTop='';
   const total=pendientes.reduce((a,g)=>a+(g.moneda==='USD'?(dolarBlue>0?g.monto*dolarBlue:0):g.monto),0);
-  lista.innerHTML=`<div style="font-size:12px;color:var(--muted);margin-bottom:8px">Te deben <strong style="color:var(--success)">${fmt(total)}</strong> en total</div>`+pendientes.map(g=>{
+  banner.innerHTML=`
+    <div class="ico">${ic('transfer')}</div>
+    <div class="info"><div class="desc" style="color:var(--success)">Te deben ${fmt(total)}</div><div class="meta">${pendientes.length} pendiente${pendientes.length===1?'':'s'} de cobro · tocá para ver</div></div>
+    <svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke:var(--muted);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;transition:transform .2s;transform:rotate(${pendientesCobroExpanded?'180':'0'}deg)"><path d="M6 9l6 6 6-6"/></svg>
+  `;
+  lista.classList.toggle('collapsible-hidden',!pendientesCobroExpanded);
+  lista.innerHTML=pendientes.map(g=>{
     const c=getCat(g.cat,'gasto');
     const fl=new Date(g.fecha+'T00:00:00').toLocaleDateString('es-AR',{day:'numeric',month:'short'});
     return`<div class="ingreso-item" style="align-items:center">
