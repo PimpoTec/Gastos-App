@@ -342,6 +342,16 @@
     #lock-overlay h2{font-size:18px;font-weight:800;margin-bottom:6px}
     #lock-overlay p{font-size:13px;color:var(--muted);max-width:280px;line-height:1.5;margin-bottom:22px}
     #lock-overlay .lock-err{font-size:12.5px;color:var(--danger);margin-bottom:14px;min-height:16px}
+
+    /* ── Layout de escritorio: mismo diseño mobile, centrado como una app de teléfono ── */
+    @media (min-width:700px){
+      body{background:radial-gradient(ellipse at top,#151e37 0%,#05070d 65%)}
+      .header,.content,.bottom-nav{left:50%;right:auto;width:430px;transform:translateX(-50%)}
+      .fab{right:calc(50% - 215px + 18px)}
+      #fab-full{right:calc(50% - 215px + 20px)!important}
+      .modal-overlay{justify-content:center}
+      .modal{max-width:430px}
+    }
   </style>
 </head>
 
