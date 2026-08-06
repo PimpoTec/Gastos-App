@@ -2329,9 +2329,9 @@ function updateHero(){
 }
 
 function getGastosPeriodoActual(tId,gList){
-  const cfg=cierres[tId];if(!cfg?.dia)return{ars:0,usd:0};
+  const cfg=cierres[tId];if(!cfg?.dia)return{ars:0,usd:0,subsPendArs:0,subsPendUsd:0};
   const desde=inicioPeriodo(cfg),hasta=proximoCierreFecha(cfg.dia);
-  let ars=0,usd=0;
+  let ars=0,usd=0,subsPendArs=0,subsPendUsd=0;
   // Gastos normales
   gList.filter(g=>{
     if(g.pago!=tId)return false;
@@ -2341,7 +2341,9 @@ function getGastosPeriodoActual(tId,gList){
     if(g.moneda==='USD') usd+=g.monto;
     else ars+=g.monto;
   });
-  // Subs confirmadas como pagadas con esta tarjeta — solo las del período actual
+  // Suscripciones de esta tarjeta que caen en el período: las ya confirmadas como
+  // pagadas suman al total gastado; las que todavía no se pagaron quedan aparte,
+  // en subsPend, hasta que se confirmen (ahí pasan a ars/usd).
   subs.filter(s=>String(s.pago)===String(tId)).forEach(s=>{
     // Determinar en qué mes cae el débito de la sub dentro del período
     let fSub=new Date(hasta.getFullYear(),hasta.getMonth(),s.dia);
@@ -2353,9 +2355,12 @@ function getGastosPeriodoActual(tId,gList){
     if(pagada){
       if(s.moneda==='USD') usd+=s.monto;
       else ars+=s.monto;
+    }else{
+      if(s.moneda==='USD') subsPendUsd+=s.monto;
+      else subsPendArs+=s.monto;
     }
   });
-  return{ars,usd};
+  return{ars,usd,subsPendArs,subsPendUsd};
 }
 
 function renderDashboard(){
@@ -2380,9 +2385,10 @@ function renderDashboard(){
   c.innerHTML=tCred.map(t=>{
     if(!cierres[t.id])return`<div class="pago-row" style="--row-accent:${t.color};opacity:0.6;cursor:pointer" onclick="openCierres()"><div class="row-top"><div class="ico" style="background:${t.color}22">${ic(t.icono)}</div><div class="info"><div class="name">${t.nombre}</div><div class="detail" style="color:var(--warning)">${ic('gear','icon-sm')} Configurar cierre y límite</div></div></div></div>`;
     const cfg=cierres[t.id];
-    const {ars,usd}=getGastosPeriodoActual(t.id,gastos);
+    const {ars,usd,subsPendArs,subsPendUsd}=getGastosPeriodoActual(t.id,gastos);
     const usdEnArs=dolarBlue>0?usd*dolarBlue:0;
-    const totalArsConUSD=ars+usdEnArs;
+    const subsPendUsdEnArs=dolarBlue>0?subsPendUsd*dolarBlue:0;
+    const totalArsConUSD=ars+usdEnArs+subsPendArs+subsPendUsdEnArs;
     const interes=Math.round(totalArsConUSD*INTERES);
     const totalConInteres=totalArsConUSD+interes;
     const fDesde=inicioPeriodo(cfg),fHasta=proximoCierreFecha(cfg.dia);
@@ -2400,11 +2406,15 @@ function renderDashboard(){
       const col=pct>=100?'var(--danger)':'var(--muted-2)';
       barHtml=`<div class="bar-wrap"><div class="bar ${cls}" style="width:${pct}%"></div></div><div class="limite-txt" style="color:${col}">${txt}</div>`;
     }
-    // Texto del total a pagar con detalle USD e interés
+    // Texto del total a pagar con detalle USD, subs pendientes e interés
     let totalTexto=`${fmt(totalConInteres)}`;
     let detalleTexto='';
     if(usd>0) detalleTexto+=`${fmt(ars)} ARS + ${fmt(usd,'USD')}${dolarBlue>0?` (≈${fmt(usdEnArs)})`:''}`;
     else detalleTexto+=`${fmt(ars)} gastado`;
+    const subsPendParts=[];
+    if(subsPendArs>0)subsPendParts.push(fmt(subsPendArs));
+    if(subsPendUsd>0)subsPendParts.push(fmt(subsPendUsd,'USD'));
+    if(subsPendParts.length) detalleTexto+=` + ${subsPendParts.join(' + ')} en suscripciones`;
     if(interes>0) detalleTexto+=` + ${fmt(interes)} interés`;
     detalleTexto+=` = <strong style="color:var(--text)">${fmt(totalConInteres)}</strong>`;
     return`<div class="pago-row" style="--row-accent:${t.color};cursor:pointer" onclick="abrirDetalleTarjeta(${t.id})">
