@@ -329,6 +329,7 @@
     .empty p{font-size:13px;font-weight:500;line-height:1.6}
     @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
     .err{border-color:var(--danger)!important;animation:shake .3s}
+    .cat-scroll.err{outline:1.5px solid var(--danger);outline-offset:5px;border-radius:var(--radius-xs)}
     #loading-overlay{position:fixed;inset:0;background:var(--bg);z-index:999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px}
     .spinner{width:36px;height:36px;border:3px solid var(--border-2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
     @keyframes spin{to{transform:rotate(360deg)}}
@@ -1610,7 +1611,7 @@ let dolarBlue=0, presupuestoMensual=0, mesOffset=0; // mesOffset: 0=este mes, -1
 let biometricEnabled=false;
 let pinHash=null,pinSalt=null;
 let tabActual='gastos';
-let selPagoGasto=null,selCatGasto=null,selPagoSub=null,selCatSub=null,selCatIngreso='sueldo',selTipoAhorro='aporte';
+let selPagoGasto=null,selCatGasto=null,selPagoSub=null,selCatSub=null,selCatIngreso=null,selTipoAhorro='aporte';
 const TIPOS_AHORRO=[{id:'aporte',nombre:'Aporte',icono:'plus'},{id:'retiro',nombre:'Retiro',icono:'minus'}];
 let selEmojiGridT='card',selColorGridT='#748ffc';
 let selEmojiGridC='box',selColorGridC='#B4B2A9';
@@ -1800,7 +1801,7 @@ function openModalGasto(id=null){
     document.getElementById('g-desc').value='';document.getElementById('g-fecha').value=today();
     document.getElementById('g-moneda').value='ARS';document.getElementById('g-es-fijo').checked=false;
     document.getElementById('g-es-reembolsable').checked=false;document.getElementById('g-reembolsable-info').style.display='none';
-    selPagoGasto=tarjetas[0]?.id||null;selCatGasto=cats.find(c=>c.tipo==='gasto')?.id||null;
+    selPagoGasto=tarjetas[0]?.id||null;selCatGasto=null;
     document.getElementById('g-is-cuota').checked=false;toggleCuotas();
     titulo.innerText='Nuevo gasto';btnSave.innerText='Guardar gasto';btnDel.style.display='none';
   }
@@ -1824,7 +1825,7 @@ function openModalSub(id=null){
     document.getElementById('s-id').value='';document.getElementById('s-nombre').value='';
     document.getElementById('s-monto').value='';document.getElementById('s-dia').value='';
     document.getElementById('s-moneda').value='ARS';
-    selPagoSub=tarjetas[0]?.id||null;selCatSub=cats.find(c=>c.tipo==='sub')?.id||null;
+    selPagoSub=tarjetas[0]?.id||null;selCatSub=null;
     titulo.innerText='Nueva suscripción';btnSave.innerText='Guardar suscripción';btnDel.style.display='none';
   }
   renderChips('s-pago-chips',tarjetas,selPagoSub,'sub');
@@ -1846,7 +1847,7 @@ function openModalIngreso(id=null){
   }else{
     document.getElementById('i-id').value='';document.getElementById('i-monto').value='';
     document.getElementById('i-desc').value='';document.getElementById('i-fecha').value=today();
-    document.getElementById('i-moneda').value='ARS';selCatIngreso='sueldo';
+    document.getElementById('i-moneda').value='ARS';selCatIngreso=null;
     titulo.innerText='Nuevo ingreso';btnSave.innerText='Guardar ingreso';btnDel.style.display='none';
   }
   renderCatIngresoChips();
@@ -2030,6 +2031,7 @@ async function submitGasto(){
   if(isNaN(monto)||monto<=0){err('g-monto');return;}
   if(!desc){err('g-desc');return;}
   if(!fecha){err('g-fecha');return;}
+  if(!selCatGasto){err('g-cat-chips');return;}
   if(isCuota&&(isNaN(cuotas)||cuotas<2)){err('g-cuotas-cant');return;}
   const t=getTarjeta(selPagoGasto);
   const cm=isCuota&&t.esTarjeta?monto/cuotas:monto;
@@ -2056,6 +2058,7 @@ async function submitSub(){
   if(!nombre){err('s-nombre');return;}
   if(isNaN(monto)||monto<=0){err('s-monto');return;}
   if(isNaN(dia)||dia<1||dia>31){err('s-dia');return;}
+  if(!selCatSub){err('s-cat-chips');return;}
   const btn=document.getElementById('btn-save-sub');btn.disabled=true;btn.textContent='Guardando...';
   const newS={id:sId?parseInt(sId):Date.now(),nombre,monto,pago:selPagoSub,dia,cat:selCatSub,moneda};
   await dbUpsertSub(newS);
@@ -2077,6 +2080,7 @@ async function submitIngreso(){
   if(isNaN(monto)||monto<=0){err('i-monto');return;}
   if(!desc){err('i-desc');return;}
   if(!fecha){err('i-fecha');return;}
+  if(!selCatIngreso){err('i-cat-chips');return;}
   const btn=document.getElementById('btn-save-ingreso');btn.disabled=true;btn.textContent='Guardando...';
   const newI={id:iId?parseInt(iId):Date.now(),monto,desc,descripcion:desc,cat:selCatIngreso,fecha,moneda};
   const{error}=await sb.from('ingresos').upsert({id:newI.id,user_id:currentUser.id,monto:newI.monto,descripcion:newI.desc,cat:newI.cat,fecha:newI.fecha,moneda:newI.moneda});
@@ -2626,7 +2630,7 @@ function abrirModalRapido(){
   if(tabActual==='balance'){openModalIngreso();return;}
   // Modal rápido para gastos
   selPagoRapido=tarjetas[0]?.id||null;
-  selCatRapido=cats.find(c=>c.tipo==='gasto')?.id||null;
+  selCatRapido=null;
   document.getElementById('r-monto').value='';
   document.getElementById('r-desc').value='';
   document.getElementById('r-moneda').value='ARS';
@@ -2660,6 +2664,7 @@ async function submitRapido(){
   const isCuota=document.getElementById('r-is-cuota').checked;
   const cuotas=parseInt(document.getElementById('r-cuotas-cant').value);
   if(isNaN(monto)||monto<=0){err('r-monto');return;}
+  if(!selCatRapido){err('r-cat-chips');return;}
   if(isCuota&&(isNaN(cuotas)||cuotas<2)){err('r-cuotas-cant');return;}
   const t=getTarjeta(selPagoRapido);
   const cuotaMonto=isCuota&&t.esTarjeta?monto/cuotas:monto;
