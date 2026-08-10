@@ -329,7 +329,7 @@
     .empty p{font-size:13px;font-weight:500;line-height:1.6}
     @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
     .err{border-color:var(--danger)!important;animation:shake .3s}
-    .cat-scroll.err{outline:1.5px solid var(--danger);outline-offset:5px;border-radius:var(--radius-xs)}
+    .cat-scroll.err,.pago-grid.err{outline:1.5px solid var(--danger);outline-offset:5px;border-radius:var(--radius-xs)}
     #loading-overlay{position:fixed;inset:0;background:var(--bg);z-index:999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px}
     .spinner{width:36px;height:36px;border:3px solid var(--border-2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
     @keyframes spin{to{transform:rotate(360deg)}}
@@ -1801,7 +1801,7 @@ function openModalGasto(id=null){
     document.getElementById('g-desc').value='';document.getElementById('g-fecha').value=today();
     document.getElementById('g-moneda').value='ARS';document.getElementById('g-es-fijo').checked=false;
     document.getElementById('g-es-reembolsable').checked=false;document.getElementById('g-reembolsable-info').style.display='none';
-    selPagoGasto=tarjetas[0]?.id||null;selCatGasto=null;
+    selPagoGasto=null;selCatGasto=null;
     document.getElementById('g-is-cuota').checked=false;toggleCuotas();
     titulo.innerText='Nuevo gasto';btnSave.innerText='Guardar gasto';btnDel.style.display='none';
   }
@@ -1825,7 +1825,7 @@ function openModalSub(id=null){
     document.getElementById('s-id').value='';document.getElementById('s-nombre').value='';
     document.getElementById('s-monto').value='';document.getElementById('s-dia').value='';
     document.getElementById('s-moneda').value='ARS';
-    selPagoSub=tarjetas[0]?.id||null;selCatSub=null;
+    selPagoSub=null;selCatSub=null;
     titulo.innerText='Nueva suscripción';btnSave.innerText='Guardar suscripción';btnDel.style.display='none';
   }
   renderChips('s-pago-chips',tarjetas,selPagoSub,'sub');
@@ -2031,6 +2031,7 @@ async function submitGasto(){
   if(isNaN(monto)||monto<=0){err('g-monto');return;}
   if(!desc){err('g-desc');return;}
   if(!fecha){err('g-fecha');return;}
+  if(!selPagoGasto){err('g-pago-chips');return;}
   if(!selCatGasto){err('g-cat-chips');return;}
   if(isCuota&&(isNaN(cuotas)||cuotas<2)){err('g-cuotas-cant');return;}
   const t=getTarjeta(selPagoGasto);
@@ -2058,6 +2059,7 @@ async function submitSub(){
   if(!nombre){err('s-nombre');return;}
   if(isNaN(monto)||monto<=0){err('s-monto');return;}
   if(isNaN(dia)||dia<1||dia>31){err('s-dia');return;}
+  if(!selPagoSub){err('s-pago-chips');return;}
   if(!selCatSub){err('s-cat-chips');return;}
   const btn=document.getElementById('btn-save-sub');btn.disabled=true;btn.textContent='Guardando...';
   const newS={id:sId?parseInt(sId):Date.now(),nombre,monto,pago:selPagoSub,dia,cat:selCatSub,moneda};
@@ -2629,7 +2631,7 @@ function abrirModalRapido(){
   if(tabActual==='subs'){openModalSub();return;}
   if(tabActual==='balance'){openModalIngreso();return;}
   // Modal rápido para gastos
-  selPagoRapido=tarjetas[0]?.id||null;
+  selPagoRapido=null;
   selCatRapido=null;
   document.getElementById('r-monto').value='';
   document.getElementById('r-desc').value='';
@@ -2664,6 +2666,7 @@ async function submitRapido(){
   const isCuota=document.getElementById('r-is-cuota').checked;
   const cuotas=parseInt(document.getElementById('r-cuotas-cant').value);
   if(isNaN(monto)||monto<=0){err('r-monto');return;}
+  if(!selPagoRapido){err('r-pago-chips');return;}
   if(!selCatRapido){err('r-cat-chips');return;}
   if(isCuota&&(isNaN(cuotas)||cuotas<2)){err('r-cuotas-cant');return;}
   const t=getTarjeta(selPagoRapido);
