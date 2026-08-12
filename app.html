@@ -549,6 +549,14 @@
         </div>
       </div>
     </div>
+    <!-- Header fijos -->
+    <div id="header-hero-fijos" style="display:none">
+      <div class="hero-card" style="padding:18px 18px 16px">
+        <div class="hero-lbl">Total de gastos fijos por mes</div>
+        <div class="hero-val" id="fijos-total-hero" style="font-size:30px">$0</div>
+        <div class="hero-sub" style="margin-top:2px">Se repiten todos los meses, más allá de lo que cargues día a día</div>
+      </div>
+    </div>
   </div>
     <!-- GASTOS -->
     <div class="panel active" id="panel-gastos">
@@ -637,6 +645,13 @@
       <div id="proy-gastos-lista"></div>
     </div>
 
+    <!-- GASTOS FIJOS -->
+    <div class="panel" id="panel-fijos">
+      <p style="font-size:12.5px;color:var(--muted);margin-bottom:16px;line-height:1.5">Todo lo que se repite mes a mes: préstamos, patente, seguro, servicios. Cargá el monto real de cada uno cuando lo sepas.</p>
+      <div class="section-title" style="margin-top:4px">Tus gastos fijos <button class="btn-cfg" onclick="abrirModalFijo()">+ Agregar</button></div>
+      <div id="fijos-lista"></div>
+    </div>
+
     <!-- PERFIL -->
     <div class="panel" id="panel-perfil">
       <div class="perfil-header">
@@ -718,6 +733,9 @@
     </button>
     <button class="nav-btn" id="nav-proyeccion" onclick="switchTab('proyeccion')">
       <svg viewBox="0 0 24 24"><path d="M4 17l5-5 4 3 7-8"/><path d="M15 4h5v5" stroke-dasharray="2.5 2.5"/></svg>Proyección
+    </button>
+    <button class="nav-btn" id="nav-fijos" onclick="switchTab('fijos')">
+      <svg viewBox="0 0 24 24"><path d="M4 16v-3.5l2-4.5h12l2 4.5V16"/><path d="M4 16h16"/><circle cx="7.5" cy="17.5" r="1.6"/><circle cx="16.5" cy="17.5" r="1.6"/><line x1="6" y1="12" x2="18" y2="12"/></svg>Fijos
     </button>
   </nav>
 </div>
@@ -931,6 +949,27 @@
     </div>
     <button class="btn-submit" id="btn-save-proyeccion" onclick="guardarProyeccionItem()">Guardar</button>
     <button class="btn-submit btn-danger" id="btn-del-proyeccion" style="display:none" onclick="eliminarProyeccionItem()">Eliminar</button>
+  </div>
+</div>
+
+<!-- Modal Gasto fijo -->
+<div class="modal-overlay" id="modal-fijo">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="modal-fijo-title">Nuevo gasto fijo</div>
+    <input type="hidden" id="f-id">
+    <div class="field"><label>Nombre</label><input type="text" id="f-nombre" placeholder="Ej: Cuota préstamo del auto..." maxlength="40"></div>
+    <div class="field"><label>Monto mensual</label>
+      <div class="amount-wrap">
+        <input type="number" id="f-monto" class="amount-input" placeholder="0" inputmode="decimal">
+        <select class="moneda-select" id="f-moneda"><option value="ARS">$ ARS</option><option value="USD">U$ USD</option></select>
+      </div>
+    </div>
+    <div class="field"><label>Categoría</label><div class="cat-scroll" id="f-cat-chips"></div></div>
+    <div class="field"><label>Medio de pago <span style="text-transform:none;font-weight:500">(opcional)</span></label><div class="pago-grid" id="f-pago-chips"></div></div>
+    <div class="field"><label>Día de vencimiento <span style="text-transform:none;font-weight:500">(opcional)</span></label><input type="number" id="f-dia" placeholder="Ej: 10" min="1" max="31" inputmode="numeric"></div>
+    <button class="btn-submit" id="btn-save-fijo" onclick="submitFijo()">Guardar gasto fijo</button>
+    <button class="btn-submit btn-danger" id="btn-del-fijo" style="display:none" onclick="eliminarFijoActual()">Eliminar</button>
   </div>
 </div>
 
@@ -1262,6 +1301,20 @@ const CATS_INGRESO=[
   {id:'reembolso',nombre:'Reembolso',icono:'transfer',color:'#63e6be'},
   {id:'otro',nombre:'Otro',icono:'box',color:'#B4B2A9'},
 ];
+const CATS_FIJO=[
+  {id:'auto',nombre:'Auto',icono:'car',color:'#748ffc'},
+  {id:'servicios',nombre:'Servicios',icono:'phone',color:'#63e6be'},
+  {id:'vivienda',nombre:'Vivienda',icono:'home',color:'#f783ac'},
+  {id:'salud',nombre:'Salud',icono:'pill',color:'#ff8787'},
+  {id:'otro',nombre:'Otro',icono:'box',color:'#B4B2A9'},
+];
+// Gastos fijos sugeridos al usar la app por primera vez: montos en $0 para que el usuario los complete.
+const GASTOS_FIJOS_SUGERIDOS=[
+  {nombre:'Cuota préstamo del auto',cat:'auto',dia:null},
+  {nombre:'Patente del auto',cat:'auto',dia:null},
+  {nombre:'Seguro del auto',cat:'auto',dia:null},
+  {nombre:'Celular',cat:'servicios',dia:null},
+];
 
 // ── DB ───────────────────────────────────────────────
 async function dbCargarGastos(){
@@ -1347,6 +1400,13 @@ async function dbCargarProyeccion(){
 }
 async function dbUpsertProyeccionItem(p){await sb.from('proyeccion_items').upsert({id:p.id,user_id:currentUser.id,mes:p.mes,tipo:p.tipo,descripcion:p.desc,monto:p.monto,moneda:p.moneda||'ARS',es_tarjeta:p.esTarjeta||false});}
 async function dbDeleteProyeccionItem(id){await sb.from('proyeccion_items').delete().eq('id',id).eq('user_id',currentUser.id);}
+async function dbCargarGastosFijos(){
+  const{data,error}=await sb.from('gastos_fijos').select('*').eq('user_id',currentUser.id).order('created_at',{ascending:true});
+  if(error){console.error('Error cargando gastos fijos:',error);return[];}
+  return data.map(f=>({id:f.id,nombre:f.nombre,monto:parseFloat(f.monto),moneda:f.moneda||'ARS',dia:f.dia||null,pago:f.pago,cat:f.cat}));
+}
+async function dbUpsertGastoFijo(f){await sb.from('gastos_fijos').upsert({id:f.id,user_id:currentUser.id,nombre:f.nombre,monto:f.monto,moneda:f.moneda||'ARS',dia:f.dia||null,pago:f.pago||null,cat:f.cat});}
+async function dbDeleteGastoFijo(id){await sb.from('gastos_fijos').delete().eq('id',id).eq('user_id',currentUser.id);}
 
 // ── Proyección ───────────────────────────────────────
 // Cuotas y suscripciones son puramente informativas acá: nunca restan solas del
@@ -1604,14 +1664,14 @@ async function dbUpsertCat(c){await sb.from('categorias').upsert({id:c.id,user_i
 async function dbDeleteCat(id){await sb.from('categorias').delete().eq('id',id).eq('user_id',currentUser.id);}
 
 // ── Estado ───────────────────────────────────────────
-let gastos=[],subs=[],ingresos=[],pagosSubs=[],cierres={},notifConfig={},tarjetas=[],cats=[],ahorros=[],proyeccionItems=[];
+let gastos=[],subs=[],ingresos=[],pagosSubs=[],cierres={},notifConfig={},tarjetas=[],cats=[],ahorros=[],proyeccionItems=[],gastosFijos=[];
 let mesOffsetProyeccion=1,selTipoProyeccion='ingreso';
 let detalleTarjetaId=null,offsetPeriodoDetalle=0;
 let dolarBlue=0, presupuestoMensual=0, mesOffset=0; // mesOffset: 0=este mes, -1=mes anterior, -2=hace 2 meses
 let biometricEnabled=false;
 let pinHash=null,pinSalt=null;
 let tabActual='gastos';
-let selPagoGasto=null,selCatGasto=null,selPagoSub=null,selCatSub=null,selCatIngreso=null,selTipoAhorro='aporte';
+let selPagoGasto=null,selCatGasto=null,selPagoSub=null,selCatSub=null,selCatIngreso=null,selTipoAhorro='aporte',selPagoFijo=null,selCatFijo=null;
 const TIPOS_AHORRO=[{id:'aporte',nombre:'Aporte',icono:'plus'},{id:'retiro',nombre:'Retiro',icono:'minus'}];
 let selEmojiGridT='card',selColorGridT='#748ffc';
 let selEmojiGridC='box',selColorGridC='#B4B2A9';
@@ -1676,12 +1736,12 @@ function switchTab(tab){
   document.getElementById('panel-'+tab).classList.add('active');
   const nb=document.getElementById('nav-'+tab);if(nb)nb.classList.add('active');
   // Mostrar header correcto
-  ['gastos','cuotas','subs','balance','proyeccion'].forEach(t=>{
+  ['gastos','cuotas','subs','balance','proyeccion','fijos'].forEach(t=>{
     const el=document.getElementById('header-hero-'+t);
     if(el) el.style.display = t===tab ? '' : 'none';
   });
   const fab=document.getElementById('fab-btn');
-  if(tab==='perfil'||tab==='proyeccion'){
+  if(tab==='perfil'||tab==='proyeccion'||tab==='fijos'){
     fab.style.display='none';
   }else{
     fab.style.display='flex';
@@ -1697,6 +1757,7 @@ function switchTab(tab){
   if(tab==='balance'){renderBalance();renderAhorros();}
   if(tab==='cuotas') renderCuotasTabs();
   if(tab==='proyeccion') renderProyeccion();
+  if(tab==='fijos') renderFijos();
 }
 
 function toggleSearch(){
@@ -2073,6 +2134,89 @@ async function eliminarSubActual(){
   await dbDeleteSub(parseInt(id));subs=subs.filter(s=>s.id!=id);
   btn.disabled=false;closeModals();renderAll();
 }
+
+// ── Gastos fijos ───────────────────────────────────────
+function renderCatFijoChips(){
+  document.getElementById('f-cat-chips').innerHTML=CATS_FIJO.map(c=>`
+    <div class="cat-chip ${c.id===selCatFijo?'selected':''}" onclick="selCatFijo='${c.id}';renderCatFijoChips()">${ic(c.icono)} ${c.nombre}</div>`).join('');
+}
+function getCatFijo(id){return CATS_FIJO.find(c=>c.id===id)||CATS_FIJO[CATS_FIJO.length-1];}
+
+function abrirModalFijo(id=null){
+  const titulo=document.getElementById('modal-fijo-title');
+  const btnDel=document.getElementById('btn-del-fijo');
+  const btnSave=document.getElementById('btn-save-fijo');
+  if(id){
+    const f=gastosFijos.find(x=>x.id===id);
+    if(!f)return;
+    document.getElementById('f-id').value=id;
+    document.getElementById('f-nombre').value=f.nombre;
+    document.getElementById('f-monto').value=f.monto||'';
+    document.getElementById('f-moneda').value=f.moneda||'ARS';
+    document.getElementById('f-dia').value=f.dia||'';
+    selCatFijo=f.cat;selPagoFijo=f.pago;
+    titulo.textContent='Editar gasto fijo';btnSave.textContent='Guardar cambios';btnDel.style.display='block';
+  }else{
+    document.getElementById('f-id').value='';
+    document.getElementById('f-nombre').value='';
+    document.getElementById('f-monto').value='';
+    document.getElementById('f-moneda').value='ARS';
+    document.getElementById('f-dia').value='';
+    selCatFijo=null;selPagoFijo=null;
+    titulo.textContent='Nuevo gasto fijo';btnSave.textContent='Guardar gasto fijo';btnDel.style.display='none';
+  }
+  renderCatFijoChips();
+  renderChips('f-pago-chips',tarjetas,selPagoFijo,'fijo');
+  openModalWithHistory('modal-fijo');
+}
+
+async function submitFijo(){
+  const fId=document.getElementById('f-id').value;
+  const nombre=document.getElementById('f-nombre').value.trim();
+  const monto=parseFloat(document.getElementById('f-monto').value);
+  const moneda=document.getElementById('f-moneda').value;
+  const dia=parseInt(document.getElementById('f-dia').value);
+  if(!nombre){err('f-nombre');return;}
+  if(isNaN(monto)||monto<0){err('f-monto');return;}
+  if(!selCatFijo){err('f-cat-chips');return;}
+  const btn=document.getElementById('btn-save-fijo');btn.disabled=true;btn.textContent='Guardando...';
+  const newF={id:fId?parseInt(fId):Date.now(),nombre,monto,moneda,dia:isNaN(dia)?null:dia,pago:selPagoFijo,cat:selCatFijo};
+  await dbUpsertGastoFijo(newF);
+  if(fId)gastosFijos=gastosFijos.map(x=>x.id==fId?newF:x);else gastosFijos.push(newF);
+  btn.disabled=false;btn.textContent='Guardar gasto fijo';
+  closeModals();renderFijos();
+}
+
+async function eliminarFijoActual(){
+  const id=document.getElementById('f-id').value;if(!id)return;
+  const btn=document.getElementById('btn-del-fijo');btn.disabled=true;btn.textContent='Eliminando...';
+  await dbDeleteGastoFijo(parseInt(id));gastosFijos=gastosFijos.filter(f=>f.id!=id);
+  btn.disabled=false;closeModals();renderFijos();
+}
+
+function renderFijos(){
+  const montoArs=f=>f.moneda==='USD'?(dolarBlue>0?f.monto*dolarBlue:0):f.monto;
+  const total=gastosFijos.reduce((a,f)=>a+montoArs(f),0);
+  const heroVal=document.getElementById('fijos-total-hero');
+  if(heroVal)heroVal.textContent=fmt(total);
+  const lista=document.getElementById('fijos-lista');
+  if(!lista)return;
+  if(!gastosFijos.length){
+    lista.innerHTML=`<div class="empty"><div class="ico">${ic('car')}</div><p style="font-weight:600;font-size:14px;margin-bottom:6px">Sin gastos fijos todavía</p><p style="font-size:13px">Sumá lo que se repite todos los meses: préstamos, patente, seguro, servicios.</p></div>`;
+    return;
+  }
+  lista.innerHTML=gastosFijos.map(f=>{
+    const c=getCatFijo(f.cat);
+    const t=f.pago?getTarjeta(f.pago):null;
+    const meta=[c.nombre,t?t.nombre:null,f.dia?`día ${f.dia}`:null].filter(Boolean).join(' · ');
+    return`<div class="gasto-item" onclick="abrirModalFijo(${f.id})">
+      <div class="ico" style="background:${c.color}22">${ic(c.icono)}</div>
+      <div class="info"><div class="desc">${f.nombre}</div><div class="meta">${meta}</div></div>
+      <div class="amount">${fmt(f.monto,f.moneda)}</div>
+    </div>`;
+  }).join('');
+}
+
 async function submitIngreso(){
   const iId=document.getElementById('i-id').value;
   const monto=parseFloat(document.getElementById('i-monto').value);
@@ -2683,7 +2827,9 @@ async function submitRapido(){
 const _selectPagoOrig=selectPago;
 function selectPago(cid,id,ctx){
   if(ctx==='rapido'){onRapidoPagoChange(id);return;}
-  if(ctx==='gasto')selPagoGasto=id;else selPagoSub=id;
+  if(ctx==='gasto')selPagoGasto=id;
+  else if(ctx==='fijo')selPagoFijo=id;
+  else selPagoSub=id;
   renderChips(cid,tarjetas,id,ctx);
 }
 
@@ -3261,9 +3407,16 @@ async function initPushNotifications() {
       await esperarDesbloqueo();
       showLoading('Cargando datos...');
     }
-    [gastos,subs,ingresos,tarjetas,cats,pagosSubs,ahorros,proyeccionItems]=await Promise.all([
-      dbCargarGastos(),dbCargarSubs(),dbCargarIngresos(),dbCargarTarjetas(),dbCargarCats(),dbCargarPagosSubs(),dbCargarAhorros(),dbCargarProyeccion()
+    [gastos,subs,ingresos,tarjetas,cats,pagosSubs,ahorros,proyeccionItems,gastosFijos]=await Promise.all([
+      dbCargarGastos(),dbCargarSubs(),dbCargarIngresos(),dbCargarTarjetas(),dbCargarCats(),dbCargarPagosSubs(),dbCargarAhorros(),dbCargarProyeccion(),dbCargarGastosFijos()
     ]);
+    if(!gastosFijos.length){
+      for(const sug of GASTOS_FIJOS_SUGERIDOS){
+        const nuevo={id:Date.now()+Math.floor(Math.random()*1000),nombre:sug.nombre,monto:0,moneda:'ARS',dia:sug.dia,pago:null,cat:sug.cat};
+        await dbUpsertGastoFijo(nuevo);
+        gastosFijos.push(nuevo);
+      }
+    }
     actualizarDolarSiNecesario(configData.dolarUpdated);
     hideLoading();
     switchTab('gastos');
