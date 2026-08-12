@@ -959,7 +959,7 @@
     <div class="modal-title" id="modal-fijo-title">Nuevo gasto fijo</div>
     <input type="hidden" id="f-id">
     <div class="field"><label>Nombre</label><input type="text" id="f-nombre" placeholder="Ej: Cuota préstamo del auto..." maxlength="40"></div>
-    <div class="field"><label>Monto mensual</label>
+    <div class="field"><label>Monto</label>
       <div class="amount-wrap">
         <input type="number" id="f-monto" class="amount-input" placeholder="0" inputmode="decimal">
         <select class="moneda-select" id="f-moneda"><option value="ARS">$ ARS</option><option value="USD">U$ USD</option></select>
@@ -967,7 +967,16 @@
     </div>
     <div class="field"><label>Categoría</label><div class="cat-scroll" id="f-cat-chips"></div></div>
     <div class="field"><label>Medio de pago <span style="text-transform:none;font-weight:500">(opcional)</span></label><div class="pago-grid" id="f-pago-chips"></div></div>
-    <div class="field"><label>Día de vencimiento <span style="text-transform:none;font-weight:500">(opcional)</span></label><input type="number" id="f-dia" placeholder="Ej: 10" min="1" max="31" inputmode="numeric"></div>
+    <div class="field"><label>Frecuencia</label><div class="cat-scroll" id="f-frecuencia-chips"></div></div>
+    <div class="field" id="f-mes-wrap" style="display:none"><label>Mes en que debita</label>
+      <select id="f-mes">
+        <option value="1">Enero</option><option value="2">Febrero</option><option value="3">Marzo</option>
+        <option value="4">Abril</option><option value="5">Mayo</option><option value="6">Junio</option>
+        <option value="7">Julio</option><option value="8">Agosto</option><option value="9">Septiembre</option>
+        <option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option>
+      </select>
+    </div>
+    <div class="field"><label>Día <span style="text-transform:none;font-weight:500">(opcional)</span></label><input type="number" id="f-dia" placeholder="Ej: 10" min="1" max="31" inputmode="numeric"></div>
     <button class="btn-submit" id="btn-save-fijo" onclick="submitFijo()">Guardar gasto fijo</button>
     <button class="btn-submit btn-danger" id="btn-del-fijo" style="display:none" onclick="eliminarFijoActual()">Eliminar</button>
   </div>
@@ -1312,12 +1321,12 @@ const CATS_FIJO=[
 // Patente en Pcia. de Bs. As. pasó a pagarse en 10 cuotas mensuales (marzo a diciembre) desde 2026.
 // VTV es anual para autos de más de 10 años (como uno 2006); peajes/Telepase es variable, no tiene abono fijo.
 const GASTOS_FIJOS_SUGERIDOS=[
-  {nombre:'Cuota préstamo del auto',cat:'auto',dia:null},
-  {nombre:'Patente del auto',cat:'auto',dia:null},
-  {nombre:'Seguro del auto',cat:'auto',dia:null},
-  {nombre:'VTV (anual)',cat:'auto',dia:null},
-  {nombre:'Peajes / Telepase',cat:'auto',dia:null},
-  {nombre:'Celular',cat:'servicios',dia:null},
+  {nombre:'Cuota préstamo del auto',cat:'auto',dia:null,frecuencia:'mensual',mes:null},
+  {nombre:'Patente del auto',cat:'auto',dia:null,frecuencia:'mensual',mes:null},
+  {nombre:'Seguro del auto',cat:'auto',dia:null,frecuencia:'mensual',mes:null},
+  {nombre:'VTV',cat:'auto',dia:null,frecuencia:'anual',mes:null},
+  {nombre:'Peajes / Telepase',cat:'auto',dia:null,frecuencia:'mensual',mes:null},
+  {nombre:'Celular',cat:'servicios',dia:null,frecuencia:'mensual',mes:null},
 ];
 
 // ── DB ───────────────────────────────────────────────
@@ -1407,9 +1416,9 @@ async function dbDeleteProyeccionItem(id){await sb.from('proyeccion_items').dele
 async function dbCargarGastosFijos(){
   const{data,error}=await sb.from('gastos_fijos').select('*').eq('user_id',currentUser.id).order('created_at',{ascending:true});
   if(error){console.error('Error cargando gastos fijos:',error);return[];}
-  return data.map(f=>({id:f.id,nombre:f.nombre,monto:parseFloat(f.monto),moneda:f.moneda||'ARS',dia:f.dia||null,pago:f.pago,cat:f.cat}));
+  return data.map(f=>({id:f.id,nombre:f.nombre,monto:parseFloat(f.monto),moneda:f.moneda||'ARS',dia:f.dia||null,pago:f.pago,cat:f.cat,frecuencia:f.frecuencia||'mensual',mes:f.mes||null}));
 }
-async function dbUpsertGastoFijo(f){await sb.from('gastos_fijos').upsert({id:f.id,user_id:currentUser.id,nombre:f.nombre,monto:f.monto,moneda:f.moneda||'ARS',dia:f.dia||null,pago:f.pago||null,cat:f.cat});}
+async function dbUpsertGastoFijo(f){await sb.from('gastos_fijos').upsert({id:f.id,user_id:currentUser.id,nombre:f.nombre,monto:f.monto,moneda:f.moneda||'ARS',dia:f.dia||null,pago:f.pago||null,cat:f.cat,frecuencia:f.frecuencia||'mensual',mes:f.frecuencia==='anual'?(f.mes||null):null});}
 async function dbDeleteGastoFijo(id){await sb.from('gastos_fijos').delete().eq('id',id).eq('user_id',currentUser.id);}
 
 // ── Proyección ───────────────────────────────────────
@@ -1675,7 +1684,7 @@ let dolarBlue=0, presupuestoMensual=0, mesOffset=0; // mesOffset: 0=este mes, -1
 let biometricEnabled=false;
 let pinHash=null,pinSalt=null;
 let tabActual='gastos';
-let selPagoGasto=null,selCatGasto=null,selPagoSub=null,selCatSub=null,selCatIngreso=null,selTipoAhorro='aporte',selPagoFijo=null,selCatFijo=null;
+let selPagoGasto=null,selCatGasto=null,selPagoSub=null,selCatSub=null,selCatIngreso=null,selTipoAhorro='aporte',selPagoFijo=null,selCatFijo=null,selFrecuenciaFijo='mensual';
 const TIPOS_AHORRO=[{id:'aporte',nombre:'Aporte',icono:'plus'},{id:'retiro',nombre:'Retiro',icono:'minus'}];
 let selEmojiGridT='card',selColorGridT='#748ffc';
 let selEmojiGridC='box',selColorGridC='#B4B2A9';
@@ -2140,11 +2149,22 @@ async function eliminarSubActual(){
 }
 
 // ── Gastos fijos ───────────────────────────────────────
+const MESES_NOMBRE=['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
 function renderCatFijoChips(){
   document.getElementById('f-cat-chips').innerHTML=CATS_FIJO.map(c=>`
     <div class="cat-chip ${c.id===selCatFijo?'selected':''}" onclick="selCatFijo='${c.id}';renderCatFijoChips()">${ic(c.icono)} ${c.nombre}</div>`).join('');
 }
 function getCatFijo(id){return CATS_FIJO.find(c=>c.id===id)||CATS_FIJO[CATS_FIJO.length-1];}
+
+function renderFrecuenciaFijoChips(){
+  const opciones=[{id:'mensual',nombre:'Todos los meses'},{id:'anual',nombre:'Una vez al año'}];
+  document.getElementById('f-frecuencia-chips').innerHTML=opciones.map(o=>`
+    <div class="cat-chip ${o.id===selFrecuenciaFijo?'selected':''}" onclick="selFrecuenciaFijo='${o.id}';renderFrecuenciaFijoChips();toggleMesFijoWrap()">${o.nombre}</div>`).join('');
+}
+function toggleMesFijoWrap(){
+  document.getElementById('f-mes-wrap').style.display=selFrecuenciaFijo==='anual'?'block':'none';
+}
 
 function abrirModalFijo(id=null){
   const titulo=document.getElementById('modal-fijo-title');
@@ -2158,7 +2178,8 @@ function abrirModalFijo(id=null){
     document.getElementById('f-monto').value=f.monto||'';
     document.getElementById('f-moneda').value=f.moneda||'ARS';
     document.getElementById('f-dia').value=f.dia||'';
-    selCatFijo=f.cat;selPagoFijo=f.pago;
+    document.getElementById('f-mes').value=f.mes||1;
+    selCatFijo=f.cat;selPagoFijo=f.pago;selFrecuenciaFijo=f.frecuencia||'mensual';
     titulo.textContent='Editar gasto fijo';btnSave.textContent='Guardar cambios';btnDel.style.display='block';
   }else{
     document.getElementById('f-id').value='';
@@ -2166,10 +2187,13 @@ function abrirModalFijo(id=null){
     document.getElementById('f-monto').value='';
     document.getElementById('f-moneda').value='ARS';
     document.getElementById('f-dia').value='';
-    selCatFijo=null;selPagoFijo=null;
+    document.getElementById('f-mes').value=1;
+    selCatFijo=null;selPagoFijo=null;selFrecuenciaFijo='mensual';
     titulo.textContent='Nuevo gasto fijo';btnSave.textContent='Guardar gasto fijo';btnDel.style.display='none';
   }
   renderCatFijoChips();
+  renderFrecuenciaFijoChips();
+  toggleMesFijoWrap();
   renderChips('f-pago-chips',tarjetas,selPagoFijo,'fijo');
   openModalWithHistory('modal-fijo');
 }
@@ -2180,11 +2204,12 @@ async function submitFijo(){
   const monto=parseFloat(document.getElementById('f-monto').value);
   const moneda=document.getElementById('f-moneda').value;
   const dia=parseInt(document.getElementById('f-dia').value);
+  const mes=parseInt(document.getElementById('f-mes').value);
   if(!nombre){err('f-nombre');return;}
   if(isNaN(monto)||monto<0){err('f-monto');return;}
   if(!selCatFijo){err('f-cat-chips');return;}
   const btn=document.getElementById('btn-save-fijo');btn.disabled=true;btn.textContent='Guardando...';
-  const newF={id:fId?parseInt(fId):Date.now(),nombre,monto,moneda,dia:isNaN(dia)?null:dia,pago:selPagoFijo,cat:selCatFijo};
+  const newF={id:fId?parseInt(fId):Date.now(),nombre,monto,moneda,dia:isNaN(dia)?null:dia,pago:selPagoFijo,cat:selCatFijo,frecuencia:selFrecuenciaFijo,mes:selFrecuenciaFijo==='anual'?mes:null};
   await dbUpsertGastoFijo(newF);
   if(fId)gastosFijos=gastosFijos.map(x=>x.id==fId?newF:x);else gastosFijos.push(newF);
   btn.disabled=false;btn.textContent='Guardar gasto fijo';
@@ -2200,25 +2225,38 @@ async function eliminarFijoActual(){
 
 function renderFijos(){
   const montoArs=f=>f.moneda==='USD'?(dolarBlue>0?f.monto*dolarBlue:0):f.monto;
-  const total=gastosFijos.reduce((a,f)=>a+montoArs(f),0);
+  const mensuales=gastosFijos.filter(f=>f.frecuencia!=='anual');
+  const anuales=gastosFijos.filter(f=>f.frecuencia==='anual');
+  const totalMensual=mensuales.reduce((a,f)=>a+montoArs(f),0);
+  const totalAnual=anuales.reduce((a,f)=>a+montoArs(f),0);
   const heroVal=document.getElementById('fijos-total-hero');
-  if(heroVal)heroVal.textContent=fmt(total);
+  if(heroVal)heroVal.textContent=fmt(totalMensual);
+  const heroSub=document.querySelector('#header-hero-fijos .hero-sub');
+  if(heroSub)heroSub.textContent=totalAnual>0?`Se repiten todos los meses. Además tenés ${fmt(totalAnual)} en gastos anuales.`:'Se repiten todos los meses, más allá de lo que cargues día a día';
   const lista=document.getElementById('fijos-lista');
   if(!lista)return;
   if(!gastosFijos.length){
     lista.innerHTML=`<div class="empty"><div class="ico">${ic('car')}</div><p style="font-weight:600;font-size:14px;margin-bottom:6px">Sin gastos fijos todavía</p><p style="font-size:13px">Sumá lo que se repite todos los meses: préstamos, patente, seguro, servicios.</p></div>`;
     return;
   }
-  lista.innerHTML=gastosFijos.map(f=>{
+  const renderItem=f=>{
     const c=getCatFijo(f.cat);
     const t=f.pago?getTarjeta(f.pago):null;
-    const meta=[c.nombre,t?t.nombre:null,f.dia?`día ${f.dia}`:null].filter(Boolean).join(' · ');
+    const cuando=f.frecuencia==='anual'
+      ?`Anual${f.mes?` · ${MESES_NOMBRE[f.mes]}`:''}${f.dia?` (día ${f.dia})`:''}`
+      :(f.dia?`día ${f.dia}`:null);
+    const meta=[c.nombre,t?t.nombre:null,cuando].filter(Boolean).join(' · ');
     return`<div class="gasto-item" onclick="abrirModalFijo(${f.id})">
       <div class="ico" style="background:${c.color}22">${ic(c.icono)}</div>
       <div class="info"><div class="desc">${f.nombre}</div><div class="meta">${meta}</div></div>
       <div class="amount">${fmt(f.monto,f.moneda)}</div>
     </div>`;
-  }).join('');
+  };
+  let html=mensuales.map(renderItem).join('');
+  if(anuales.length){
+    html+=`<div class="section-title">Gastos anuales (no se suman al total mensual)</div>`+anuales.map(renderItem).join('');
+  }
+  lista.innerHTML=html;
 }
 
 async function submitIngreso(){
@@ -3416,7 +3454,7 @@ async function initPushNotifications() {
     ]);
     if(!gastosFijos.length){
       for(const sug of GASTOS_FIJOS_SUGERIDOS){
-        const nuevo={id:Date.now()+Math.floor(Math.random()*1000),nombre:sug.nombre,monto:0,moneda:'ARS',dia:sug.dia,pago:null,cat:sug.cat};
+        const nuevo={id:Date.now()+Math.floor(Math.random()*1000),nombre:sug.nombre,monto:0,moneda:'ARS',dia:sug.dia,pago:null,cat:sug.cat,frecuencia:sug.frecuencia,mes:sug.mes};
         await dbUpsertGastoFijo(nuevo);
         gastosFijos.push(nuevo);
       }
