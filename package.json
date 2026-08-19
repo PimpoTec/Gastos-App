@@ -1,0 +1,12 @@
+{
+  "name": "gastos-app",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Mis Gastos — PWA de finanzas personales (single-file, sin build).",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0"
+  }
+}
