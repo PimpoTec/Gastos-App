@@ -1457,15 +1457,16 @@ function renderItemProyeccion(p){
   </div>`;
 }
 
-// Cuotas de tarjeta todavía activas en el ciclo del mes objetivo. Cada tarjeta
-// puede tener un día de cierre distinto, así que el punto de referencia para
-// "qué cuota está activa" se calcula con el cierre real de esa tarjeta dentro
-// del mes objetivo (no un día fijo genérico para todas).
-function cuotasEnCiclo(mesRef){
+// Cuotas de tarjeta que vas a pagar en el mes objetivo (mesPago). La liquidación
+// que se paga en un mes es la que CIERRA el mes anterior (ej: lo que cierra el
+// 27 de agosto se paga en septiembre), así que el cierre de referencia de cada
+// tarjeta se busca un mes antes de mesPago, no dentro de mesPago mismo.
+function cuotasEnCiclo(mesPago){
+  const mesCierre=new Date(mesPago.getFullYear(),mesPago.getMonth()-1,1);
   return gastos.filter(g=>g.cuotas&&getTarjeta(g.pago).esTarjeta).map(g=>{
     const dc=cierres[g.pago]?.dia||31;
-    const diasEnMes=new Date(mesRef.getFullYear(),mesRef.getMonth()+1,0).getDate();
-    const refCierre=new Date(mesRef.getFullYear(),mesRef.getMonth(),Math.min(dc,diasEnMes));
+    const diasEnMes=new Date(mesCierre.getFullYear(),mesCierre.getMonth()+1,0).getDate();
+    const refCierre=new Date(mesCierre.getFullYear(),mesCierre.getMonth(),Math.min(dc,diasEnMes));
     return{...g,numCuota:calcularCuotaActual(g.fecha,dc,refCierre)};
   }).filter(g=>g.numCuota>=1&&g.numCuota<=g.cuotas);
 }
