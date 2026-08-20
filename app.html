@@ -646,7 +646,7 @@
           <span id="proy-mes-nav-label" style="font-size:13px;font-weight:600;color:var(--muted-2)">—</span>
           <button onclick="cambiarMesProyeccion(1)" style="background:var(--card);border:1px solid var(--border-2);color:var(--text);padding:6px 12px;border-radius:99px;cursor:pointer;font-size:13px;font-weight:600">Siguiente →</button>
         </div>
-        <p style="font-size:12.5px;color:var(--muted);margin-bottom:16px;line-height:1.5">Simulá cómo te va a quedar la plata este mes. Tus gastos fijos ya se descuentan solos. Las cuotas y suscripciones son solo informativas: no restan del disponible, vos agregás a mano lo que efectivamente vas a pagar.</p>
+        <p style="font-size:12.5px;color:var(--muted);margin-bottom:16px;line-height:1.5">Simulá cómo te va a quedar la plata este mes. Tus gastos fijos ya se descuentan solos. Las cuotas y suscripciones son solo informativas: no restan del disponible. Para cada tarjeta podés tocar "Agregar pago real" y sumar automáticamente, como gasto planeado, lo que vas a pagar ese mes (cuotas + interés estimado) — o cargarlo vos a mano si preferís otro monto.</p>
 
         <div class="section-title" style="margin-top:4px">Proyectado por medio de pago</div>
         <div class="pago-breakdown" id="proy-breakdown"></div>
@@ -1454,11 +1454,16 @@ function renderItemProyeccion(p){
   </div>`;
 }
 
-// Cuotas de tarjeta todavía activas en el ciclo del mes objetivo.
-function cuotasEnCiclo(refDate){
+// Cuotas de tarjeta todavía activas en el ciclo del mes objetivo. Cada tarjeta
+// puede tener un día de cierre distinto, así que el punto de referencia para
+// "qué cuota está activa" se calcula con el cierre real de esa tarjeta dentro
+// del mes objetivo (no un día fijo genérico para todas).
+function cuotasEnCiclo(mesRef){
   return gastos.filter(g=>g.cuotas&&getTarjeta(g.pago).esTarjeta).map(g=>{
     const dc=cierres[g.pago]?.dia||31;
-    return{...g,numCuota:calcularCuotaActual(g.fecha,dc,refDate)};
+    const diasEnMes=new Date(mesRef.getFullYear(),mesRef.getMonth()+1,0).getDate();
+    const refCierre=new Date(mesRef.getFullYear(),mesRef.getMonth(),Math.min(dc,diasEnMes));
+    return{...g,numCuota:calcularCuotaActual(g.fecha,dc,refCierre)};
   }).filter(g=>g.numCuota>=1&&g.numCuota<=g.cuotas);
 }
 
@@ -1508,12 +1513,20 @@ function renderProyeccion(){
   if(breakdown){
     breakdown.innerHTML=tarjetas.length?tarjetas.map(t=>{
       const total=porMedio[t.id]||0;
+      const tieneCierre=t.esTarjeta&&cierres[t.id]?.dia;
+      const pagoReal=tieneCierre?Math.round(total*(1+INTERES_TARJETA)):0;
+      const descPago=`Pago tarjeta ${t.nombre}`;
+      const yaAgregado=proyeccionItems.some(p=>p.tipo==='gasto'&&p.mes===mesKey&&p.desc===descPago);
+      const btnPago=tieneCierre&&pagoReal>0
+        ?`<button class="btn-cfg" style="margin-top:8px;width:100%" onclick="agregarPagoTarjetaProyeccion(${t.id})">${yaAgregado?`↻ Actualizar pago real en "Gastos que planeás" (${fmt(pagoReal)})`:`+ Agregar pago real a "Gastos que planeás" (${fmt(pagoReal)})`}</button>`
+        :'';
       return`<div class="pago-row" style="--row-accent:${t.color}${total?'':';opacity:0.6'}">
         <div class="row-top">
           <div class="ico" style="background:${t.color}22">${ic(t.icono)}</div>
           <div class="info"><div class="name">${t.nombre}</div><div class="detail">${t.esTarjeta?'Tarjeta de crédito':'Débito'} · no resta del disponible</div></div>
           <div class="monto-grande" style="color:${t.color}">${fmt(total)}</div>
         </div>
+        ${btnPago}
       </div>`;
     }).join(''):'<div style="font-size:13px;color:var(--muted)">Configurá tus medios de pago en Perfil</div>';
   }
@@ -1565,6 +1578,27 @@ function renderProyeccion(){
     listaGas.innerHTML=gastosItems.length?gastosItems.map(p=>renderItemProyeccion(p)).join(''):
       `<div class="empty"><div class="ico">${ic('box')}</div><p style="font-weight:600;font-size:14px;margin-bottom:4px">Sin gastos planeados</p><p style="font-size:13px">Sumá compras o gastos que estás pensando hacer, o el pago de la tarjeta del mes pasado.</p></div>`;
   }
+}
+
+// Calcula lo que realmente vas a pagar de una tarjeta en el mes proyectado
+// (cuotas activas + suscripciones de esa tarjeta + interés estimado) y lo
+// carga como gasto planeado, para que sí reste del disponible del mes.
+async function agregarPagoTarjetaProyeccion(tarjetaId){
+  const t=tarjetas.find(x=>x.id===tarjetaId);
+  if(!t||!cierres[tarjetaId]?.dia)return;
+  const mesRef=targetDateProyeccion();
+  const mesKey=mesKeyProyeccion();
+  const montoArs=g=>g.moneda==='USD'?(dolarBlue>0?g.monto*dolarBlue:0):g.monto;
+  const totalCuotas=cuotasEnCiclo(mesRef).filter(g=>String(g.pago)===String(tarjetaId)).reduce((a,g)=>a+montoArs(g),0);
+  const totalSubs=subs.filter(s=>String(s.pago)===String(tarjetaId)).reduce((a,s)=>a+montoArs(s),0);
+  const pagoReal=Math.round((totalCuotas+totalSubs)*(1+INTERES_TARJETA));
+  if(pagoReal<=0)return;
+  const desc=`Pago tarjeta ${t.nombre}`;
+  const existente=proyeccionItems.find(p=>p.tipo==='gasto'&&p.mes===mesKey&&p.desc===desc);
+  const newP={id:existente?existente.id:nuevoId(),mes:mesKey,tipo:'gasto',desc,monto:pagoReal,moneda:'ARS',esTarjeta:false};
+  await dbUpsertProyeccionItem(newP);
+  proyeccionItems=existente?proyeccionItems.map(p=>p.id===existente.id?newP:p):[newP,...proyeccionItems];
+  renderProyeccion();
 }
 
 function abrirModalProyeccion(tipo,id=null){
@@ -1707,6 +1741,7 @@ async function dbUpsertCat(c){await sb.from('categorias').upsert({id:c.id,user_i
 async function dbDeleteCat(id){await sb.from('categorias').delete().eq('id',id).eq('user_id',currentUser.id);}
 
 // ── Estado ───────────────────────────────────────────
+const INTERES_TARJETA=0.0121; // recargo estimado por financiación, usado en dashboard y proyección
 let gastos=[],subs=[],ingresos=[],pagosSubs=[],cierres={},notifConfig={},tarjetas=[],cats=[],ahorros=[],proyeccionItems=[],gastosFijos=[];
 let mesOffsetProyeccion=1,selTipoProyeccion='ingreso';
 let detalleTarjetaId=null,offsetPeriodoDetalle=0;
@@ -2628,7 +2663,7 @@ function getGastosPeriodoActual(tId,gList){
 }
 
 function renderDashboard(){
-  const INTERES=0.0121;
+  const INTERES=INTERES_TARJETA;
   const hoy=new Date();let eventos=[];
   tarjetas.filter(t=>t.esTarjeta&&cierres[t.id]).forEach(t=>{
     const fC=proximoCierreFecha(cierres[t.id].dia);
