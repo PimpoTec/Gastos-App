@@ -1483,6 +1483,26 @@ function cuotasEnCiclo(mesCierre){
   }).filter(g=>g.numCuota>=1&&g.numCuota<=g.cuotas);
 }
 
+// Total real que se paga de una tarjeta en el período que cierra dentro de
+// mesCierre: cuotas activas + gastos de pago único de ese mismo período (los
+// gastos sin cuotas también entran en la liquidación, y getGastosPeriodoActual
+// del dashboard los suma — acá había quedado afuera, por eso no coincidían).
+function totalCicloTarjeta(tarjetaId,mesCierre){
+  const cfg=cierres[tarjetaId];if(!cfg?.dia)return 0;
+  const diasEnMes=new Date(mesCierre.getFullYear(),mesCierre.getMonth()+1,0).getDate();
+  const refCierre=new Date(mesCierre.getFullYear(),mesCierre.getMonth(),Math.min(cfg.dia,diasEnMes));
+  const desde=inicioPeriodo(cfg,refCierre),hasta=proximoCierreFecha(cfg.dia,refCierre);
+  const montoArs=g=>g.moneda==='USD'?(dolarBlue>0?g.monto*dolarBlue:0):g.monto;
+  return gastos.filter(g=>String(g.pago)===String(tarjetaId)).reduce((total,g)=>{
+    if(g.cuotas){
+      const n=calcularCuotaActual(g.fecha,cfg.dia,refCierre);
+      return(n>=1&&n<=g.cuotas)?total+montoArs(g):total;
+    }
+    const fd=new Date(g.fecha+'T00:00:00');
+    return(fd>=desde&&fd<=hasta)?total+montoArs(g):total;
+  },0);
+}
+
 function renderProyeccion(){
   const montoArs=g=>g.moneda==='USD'?(dolarBlue>0?g.monto*dolarBlue:0):g.monto;
   const mesKey=mesKeyProyeccion();
@@ -1527,19 +1547,19 @@ function renderProyeccion(){
 
   // Lo que efectivamente se paga este mes es la liquidación que cierra el mes
   // anterior (no las cuotas activas del propio mes proyectado, que es el
-  // número informativo de arriba). Se usa solo para el botón "pago real".
+  // número informativo de arriba), y también incluye los gastos de pago único
+  // de ese período (no solo los que tienen cuotas). Se usa solo para el botón
+  // "pago real".
   const mesCierrePago=new Date(refDate.getFullYear(),refDate.getMonth()-1,1);
-  const porMedioPago={};
-  const sumarMedioPago=(id,monto)=>{porMedioPago[id]=(porMedioPago[id]||0)+monto;};
-  cuotasEnCiclo(mesCierrePago).forEach(g=>sumarMedioPago(g.pago,montoArs(g)));
-  subs.forEach(s=>sumarMedioPago(s.pago,montoArs(s)));
+  const totalSubsPorTarjeta={};
+  subs.forEach(s=>{totalSubsPorTarjeta[s.pago]=(totalSubsPorTarjeta[s.pago]||0)+montoArs(s);});
 
   const breakdown=document.getElementById('proy-breakdown');
   if(breakdown){
     breakdown.innerHTML=tarjetas.length?tarjetas.map(t=>{
       const total=porMedio[t.id]||0;
       const tieneCierre=t.esTarjeta&&cierres[t.id]?.dia;
-      const totalPago=porMedioPago[t.id]||0;
+      const totalPago=tieneCierre?totalCicloTarjeta(t.id,mesCierrePago)+(totalSubsPorTarjeta[t.id]||0):0;
       const pagoReal=tieneCierre?Math.round(totalPago*(1+INTERES_TARJETA)):0;
       const descPago=`Pago tarjeta ${t.nombre}`;
       const yaAgregado=proyeccionItems.some(p=>p.tipo==='gasto'&&p.mes===mesKey&&p.desc===descPago);
@@ -1620,9 +1640,9 @@ async function agregarPagoTarjetaProyeccion(tarjetaId){
   const mesCierre=new Date(mesPago.getFullYear(),mesPago.getMonth()-1,1);
   const mesKey=mesKeyProyeccion();
   const montoArs=g=>g.moneda==='USD'?(dolarBlue>0?g.monto*dolarBlue:0):g.monto;
-  const totalCuotas=cuotasEnCiclo(mesCierre).filter(g=>String(g.pago)===String(tarjetaId)).reduce((a,g)=>a+montoArs(g),0);
+  const totalCiclo=totalCicloTarjeta(tarjetaId,mesCierre);
   const totalSubs=subs.filter(s=>String(s.pago)===String(tarjetaId)).reduce((a,s)=>a+montoArs(s),0);
-  const pagoReal=Math.round((totalCuotas+totalSubs)*(1+INTERES_TARJETA));
+  const pagoReal=Math.round((totalCiclo+totalSubs)*(1+INTERES_TARJETA));
   if(pagoReal<=0)return;
   const desc=`Pago tarjeta ${t.nombre}`;
   const existente=proyeccionItems.find(p=>p.tipo==='gasto'&&p.mes===mesKey&&p.desc===desc);
