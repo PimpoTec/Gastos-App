@@ -156,6 +156,9 @@
     .pago-row .bar{height:100%;border-radius:99px;transition:width .5s}
     .bar.ok{background:linear-gradient(90deg,var(--accent-dark),var(--accent))}.bar.over{background:var(--danger)}
     .limite-txt{font-size:11px;margin-top:5px;font-weight:500}
+    .btn-pago-real{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;margin-top:12px;padding:9px 12px;border-radius:99px;border:1px solid transparent;background:none;font-size:12.5px;font-weight:700;letter-spacing:-.1px;cursor:pointer;transition:opacity .15s,transform .1s}
+    .btn-pago-real svg{width:14px;height:14px}
+    .btn-pago-real:active{transform:scale(.97);opacity:.75}
     .cierre-info{display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:var(--muted)}
 
     /* ── Consejo financiero (insight card) ── */
@@ -1518,7 +1521,7 @@ function renderProyeccion(){
       const descPago=`Pago tarjeta ${t.nombre}`;
       const yaAgregado=proyeccionItems.some(p=>p.tipo==='gasto'&&p.mes===mesKey&&p.desc===descPago);
       const btnPago=tieneCierre&&pagoReal>0
-        ?`<button class="btn-cfg" style="margin-top:8px;width:100%" onclick="agregarPagoTarjetaProyeccion(${t.id})">${yaAgregado?`↻ Actualizar pago real en "Gastos que planeás" (${fmt(pagoReal)})`:`+ Agregar pago real a "Gastos que planeás" (${fmt(pagoReal)})`}</button>`
+        ?`<button class="btn-pago-real" style="background:${t.color}18;border-color:${t.color}40;color:${t.color}" onclick="agregarPagoTarjetaProyeccion(${t.id})">${ic(yaAgregado?'refresh':'plus','icon-sm')} ${yaAgregado?`Actualizar pago real · ${fmt(pagoReal)}`:`Agregar pago real · ${fmt(pagoReal)}`}</button>`
         :'';
       return`<div class="pago-row" style="--row-accent:${t.color}${total?'':';opacity:0.6'}">
         <div class="row-top">
