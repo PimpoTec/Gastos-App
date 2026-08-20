@@ -841,6 +841,19 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="modal-recordatorio-cierre">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div style="text-align:center;margin-bottom:20px">
+      <svg class="icon" style="width:44px;height:44px;color:var(--accent);margin-bottom:10px"><use href="#i-card"></use></svg>
+      <div class="modal-title" style="text-align:center">¿Sigue el mismo cierre?</div>
+      <p style="font-size:14px;color:var(--muted);line-height:1.6"><strong style="color:var(--text)" id="recordatorio-cierre-tarjeta"></strong> acaba de cerrar. El día de cierre y de vencimiento a veces se corren de un mes a otro (fines de semana, feriados) — revisá que sigan siendo correctos.</p>
+    </div>
+    <button class="btn-submit" onclick="closeModals();openCierres()">Revisar cierre y vencimiento</button>
+    <button class="btn-secondary" onclick="closeModals()">Sigue igual</button>
+  </div>
+</div>
+
 <!-- Modal Gasto -->
 <div class="modal-overlay" id="modal-gasto">
   <div class="modal">
@@ -999,8 +1012,8 @@
 <div class="modal-overlay" id="modal-cierres">
   <div class="modal">
     <div class="modal-handle"></div>
-    <div class="modal-title">Cierres y límites</div>
-    <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.5">Solo para tarjetas de crédito.</p>
+    <div class="modal-title">Cierres y vencimientos</div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.5">Solo para tarjetas de crédito. El día de cierre y el de vencimiento pueden moverse un poco de un mes a otro (fines de semana, feriados) — si tu banco los cambió, actualizalos acá.</p>
     <div id="cierre-list"></div>
     <button class="btn-submit" onclick="saveCierres()">Guardar</button>
     <button class="btn-secondary" onclick="closeModals()">Cancelar</button>
@@ -2084,6 +2097,11 @@ function openCierres(){
             style="width:56px;text-align:center;padding:6px;font-size:14px;font-weight:600;border:1px solid var(--border);background:var(--card);color:var(--text);border-radius:6px">
         </div>
         <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:11px;color:var(--muted)">Vence</span>
+          <input type="number" id="vencimiento-${t.id}" min="1" max="31" inputmode="numeric" placeholder="—" value="${cierres[t.id]?.vencimiento||''}"
+            style="width:56px;text-align:center;padding:6px;font-size:14px;font-weight:600;border:1px solid var(--border);background:var(--card);color:var(--text);border-radius:6px">
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
           <span style="font-size:11px;color:var(--muted)">Límite $</span>
           <input type="number" id="limite-${t.id}" min="0" inputmode="numeric" placeholder="—" value="${cierres[t.id]?.limite||''}"
             style="width:80px;text-align:center;padding:6px;font-size:14px;font-weight:600;border:1px solid var(--border);background:var(--card);color:var(--text);border-radius:6px">
@@ -2468,10 +2486,11 @@ async function eliminarCatActual(){
 async function saveCierres(){
   tarjetas.filter(t=>t.esTarjeta).forEach(t=>{
     const dia=parseInt(document.getElementById('cierre-'+t.id)?.value);
+    const vencimiento=parseInt(document.getElementById('vencimiento-'+t.id)?.value);
     const limite=parseFloat(document.getElementById('limite-'+t.id)?.value);
     if(dia>=1&&dia<=31){
       const anterior=cierres[t.id];
-      const nuevo={dia,limite:(!isNaN(limite)&&limite>0)?limite:null};
+      const nuevo={dia,vencimiento:(vencimiento>=1&&vencimiento<=31)?vencimiento:null,limite:(!isNaN(limite)&&limite>0)?limite:null};
       if(anterior?.dia&&anterior.dia!==dia){
         // Guardamos el día viejo para no "revivir" gastos que ya habían cerrado con esa fecha
         nuevo.diaAnterior=anterior.dia;
@@ -2686,7 +2705,7 @@ function renderDashboard(){
   const tCred=tarjetas.filter(t=>t.esTarjeta);
   if(!tCred.length){c.innerHTML='<div style="font-size:13px;color:var(--muted)">Configurá tus tarjetas en Perfil</div>';return;}
   c.innerHTML=tCred.map(t=>{
-    if(!cierres[t.id])return`<div class="pago-row" style="--row-accent:${t.color};opacity:0.6;cursor:pointer" onclick="openCierres()"><div class="row-top"><div class="ico" style="background:${t.color}22">${ic(t.icono)}</div><div class="info"><div class="name">${t.nombre}</div><div class="detail" style="color:var(--warning)">${ic('gear','icon-sm')} Configurar cierre y límite</div></div></div></div>`;
+    if(!cierres[t.id])return`<div class="pago-row" style="--row-accent:${t.color};opacity:0.6;cursor:pointer" onclick="openCierres()"><div class="row-top"><div class="ico" style="background:${t.color}22">${ic(t.icono)}</div><div class="info"><div class="name">${t.nombre}</div><div class="detail" style="color:var(--warning)">${ic('gear','icon-sm')} Configurar cierre y vencimiento</div></div></div></div>`;
     const cfg=cierres[t.id];
     const {ars,usd,subsPendArs,subsPendUsd}=getGastosPeriodoActual(t.id,gastos);
     const usdEnArs=dolarBlue>0?usd*dolarBlue:0;
@@ -2700,6 +2719,12 @@ function renderDashboard(){
     const diff=Math.ceil((fHasta-new Date())/(1000*60*60*24));
     const txtC=diff===0?'Cierra hoy':diff===1?'Cierra mañana':`Cierra en ${diff} días`;
     const alertC=diff<=2?'color:var(--danger)':'color:var(--muted)';
+    let strVencimiento=null;
+    if(cfg.vencimiento){
+      const fVenc=new Date(fHasta.getFullYear(),fHasta.getMonth(),cfg.vencimiento);
+      if(fVenc<fHasta)fVenc.setMonth(fVenc.getMonth()+1);
+      strVencimiento=fVenc.toLocaleDateString('es-AR',{day:'numeric',month:'short'});
+    }
     let barHtml='';
     if(cfg.limite){
       const pct=Math.min((totalArsConUSD/cfg.limite)*100,100);
@@ -2734,7 +2759,7 @@ function renderDashboard(){
       </div>
       ${barHtml}
       <div class="cierre-info">
-        <span style="${alertC}">${txtC}</span>
+        <span style="${alertC}">${txtC}${strVencimiento?` · Vence ${strVencimiento}`:''}</span>
         <span style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted)">
           Total <strong style="color:var(--text)">${fmt(totalConInteres)}</strong>
           <button onclick="event.stopPropagation();toggleDesglose('${desgloseId}')" style="background:none;border:none;padding:2px;margin:-2px;cursor:pointer;display:flex;color:var(--muted)" aria-label="Ver desglose">${ic('info','icon-sm')}</button>
@@ -3503,6 +3528,33 @@ function checkRecordatorioMes(){
   openModalWithHistory('modal-recordatorio');
 }
 
+// Avisa, los primeros días después de que cierra una tarjeta, para que se
+// confirme que el día de cierre y de vencimiento siguen siendo los mismos
+// (el banco los corre seguido por fines de semana/feriados). Se guarda en
+// localStorage para no repetir el aviso más de una vez por cierre.
+function checkRecordatorioCierre(){
+  const hoy=new Date();hoy.setHours(0,0,0,0);
+  const tarjetasConCierre=tarjetas.filter(t=>t.esTarjeta&&cierres[t.id]?.dia);
+  for(const t of tarjetasConCierre){
+    const dia=cierres[t.id].dia;
+    const diasEsteMes=new Date(hoy.getFullYear(),hoy.getMonth()+1,0).getDate();
+    let ultimoCierre=new Date(hoy.getFullYear(),hoy.getMonth(),Math.min(dia,diasEsteMes));
+    if(ultimoCierre>hoy){
+      const mesAnt=new Date(hoy.getFullYear(),hoy.getMonth()-1,1);
+      const diasMesAnt=new Date(mesAnt.getFullYear(),mesAnt.getMonth()+1,0).getDate();
+      ultimoCierre=new Date(mesAnt.getFullYear(),mesAnt.getMonth(),Math.min(dia,diasMesAnt));
+    }
+    const diasDesdeCierre=Math.round((hoy-ultimoCierre)/86400000);
+    if(diasDesdeCierre<0||diasDesdeCierre>2)continue; // solo el cierre más reciente, primeros días
+    const claveCierre=`recordatorio_cierre_${t.id}_${ultimoCierre.getFullYear()}-${ultimoCierre.getMonth()}`;
+    if(localStorage.getItem(claveCierre))continue;
+    localStorage.setItem(claveCierre,'shown');
+    document.getElementById('recordatorio-cierre-tarjeta').textContent=t.nombre;
+    openModalWithHistory('modal-recordatorio-cierre');
+    return; // uno solo por vez, para no encimar modales
+  }
+}
+
 // ── Web Push nativo ──────────────────────────────────
 const VAPID_PUBLIC_KEY = 'BJsv7shyE837UZkQE_LAkanF79RokFSFq3hAOmck2VN5MjsM2__YS89n11eQZHyUE23ihiuz7rJvrU7U1owQM38';
 
@@ -3576,6 +3628,7 @@ async function initPushNotifications() {
     renderAll();
     ajustarLayout();
     setTimeout(checkRecordatorioMes, 800);
+    setTimeout(checkRecordatorioCierre, 1000);
     setTimeout(checkBienvenida, 1200);
     setTimeout(initPushNotifications, 2000);
   }catch(e){
