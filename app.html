@@ -1489,9 +1489,18 @@ function cuotasEnCiclo(mesCierre){
 // del dashboard los suma — acá había quedado afuera, por eso no coincidían).
 function totalCicloTarjeta(tarjetaId,mesCierre){
   const cfg=cierres[tarjetaId];if(!cfg?.dia)return 0;
+  // No se usa inicioPeriodo/proximoCierreFecha acá: esas funciones ajustan el
+  // inicio del período según si "hoy" ya pasó el primer cierre con un día
+  // nuevo (cuando se cambió el día de cierre recientemente), y esa lógica
+  // solo tiene sentido comparada contra el momento real, no contra la fecha
+  // de cierre hipotética de un mes proyectado — usarla acá corría el inicio
+  // del período semanas para adelante y dejaba afuera gastos que sí entraban.
   const diasEnMes=new Date(mesCierre.getFullYear(),mesCierre.getMonth()+1,0).getDate();
-  const refCierre=new Date(mesCierre.getFullYear(),mesCierre.getMonth(),Math.min(cfg.dia,diasEnMes));
-  const desde=inicioPeriodo(cfg,refCierre),hasta=proximoCierreFecha(cfg.dia,refCierre);
+  const hasta=new Date(mesCierre.getFullYear(),mesCierre.getMonth(),Math.min(cfg.dia,diasEnMes));
+  const mesAnterior=new Date(mesCierre.getFullYear(),mesCierre.getMonth()-1,1);
+  const diasMesAnterior=new Date(mesAnterior.getFullYear(),mesAnterior.getMonth()+1,0).getDate();
+  const desde=new Date(mesAnterior.getFullYear(),mesAnterior.getMonth(),Math.min(cfg.dia,diasMesAnterior)+1);
+  const refCierre=hasta;
   const montoArs=g=>g.moneda==='USD'?(dolarBlue>0?g.monto*dolarBlue:0):g.monto;
   return gastos.filter(g=>String(g.pago)===String(tarjetaId)).reduce((total,g)=>{
     if(g.cuotas){
