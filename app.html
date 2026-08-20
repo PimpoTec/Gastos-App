@@ -1470,12 +1470,11 @@ function renderItemProyeccion(p){
   </div>`;
 }
 
-// Cuotas de tarjeta que vas a pagar en el mes objetivo (mesPago). La liquidación
-// que se paga en un mes es la que CIERRA el mes anterior (ej: lo que cierra el
-// 27 de agosto se paga en septiembre), así que el cierre de referencia de cada
-// tarjeta se busca un mes antes de mesPago, no dentro de mesPago mismo.
-function cuotasEnCiclo(mesPago){
-  const mesCierre=new Date(mesPago.getFullYear(),mesPago.getMonth()-1,1);
+// Cuotas de tarjeta activas durante el mes de "mesCierre" (informativo: qué
+// cuotas están corriendo ese mes, como si ya estuvieras viviéndolo). Cada
+// tarjeta puede tener un día de cierre distinto, así que el punto de
+// referencia se calcula con el cierre real de esa tarjeta dentro de ese mes.
+function cuotasEnCiclo(mesCierre){
   return gastos.filter(g=>g.cuotas&&getTarjeta(g.pago).esTarjeta).map(g=>{
     const dc=cierres[g.pago]?.dia||31;
     const diasEnMes=new Date(mesCierre.getFullYear(),mesCierre.getMonth()+1,0).getDate();
@@ -1526,12 +1525,22 @@ function renderProyeccion(){
   cuotasActivas.forEach(g=>sumarMedio(g.pago,montoArs(g)));
   subs.forEach(s=>sumarMedio(s.pago,montoArs(s)));
 
+  // Lo que efectivamente se paga este mes es la liquidación que cierra el mes
+  // anterior (no las cuotas activas del propio mes proyectado, que es el
+  // número informativo de arriba). Se usa solo para el botón "pago real".
+  const mesCierrePago=new Date(refDate.getFullYear(),refDate.getMonth()-1,1);
+  const porMedioPago={};
+  const sumarMedioPago=(id,monto)=>{porMedioPago[id]=(porMedioPago[id]||0)+monto;};
+  cuotasEnCiclo(mesCierrePago).forEach(g=>sumarMedioPago(g.pago,montoArs(g)));
+  subs.forEach(s=>sumarMedioPago(s.pago,montoArs(s)));
+
   const breakdown=document.getElementById('proy-breakdown');
   if(breakdown){
     breakdown.innerHTML=tarjetas.length?tarjetas.map(t=>{
       const total=porMedio[t.id]||0;
       const tieneCierre=t.esTarjeta&&cierres[t.id]?.dia;
-      const pagoReal=tieneCierre?Math.round(total*(1+INTERES_TARJETA)):0;
+      const totalPago=porMedioPago[t.id]||0;
+      const pagoReal=tieneCierre?Math.round(totalPago*(1+INTERES_TARJETA)):0;
       const descPago=`Pago tarjeta ${t.nombre}`;
       const yaAgregado=proyeccionItems.some(p=>p.tipo==='gasto'&&p.mes===mesKey&&p.desc===descPago);
       const btnPago=tieneCierre&&pagoReal>0
@@ -1599,14 +1608,19 @@ function renderProyeccion(){
 
 // Calcula lo que realmente vas a pagar de una tarjeta en el mes proyectado
 // (cuotas activas + suscripciones de esa tarjeta + interés estimado) y lo
-// carga como gasto planeado, para que sí reste del disponible del mes.
+// carga como gasto planeado, para que sí reste del disponible del mes. La
+// liquidación que se paga en un mes es la que CIERRA el mes anterior (ej:
+// lo que cierra el 27 de agosto se paga en septiembre), así que acá sí se
+// usa el cierre del mes anterior al mes proyectado, a diferencia del
+// número informativo de "cuotas activas" que muestra el mes tal cual.
 async function agregarPagoTarjetaProyeccion(tarjetaId){
   const t=tarjetas.find(x=>x.id===tarjetaId);
   if(!t||!cierres[tarjetaId]?.dia)return;
-  const mesRef=targetDateProyeccion();
+  const mesPago=targetDateProyeccion();
+  const mesCierre=new Date(mesPago.getFullYear(),mesPago.getMonth()-1,1);
   const mesKey=mesKeyProyeccion();
   const montoArs=g=>g.moneda==='USD'?(dolarBlue>0?g.monto*dolarBlue:0):g.monto;
-  const totalCuotas=cuotasEnCiclo(mesRef).filter(g=>String(g.pago)===String(tarjetaId)).reduce((a,g)=>a+montoArs(g),0);
+  const totalCuotas=cuotasEnCiclo(mesCierre).filter(g=>String(g.pago)===String(tarjetaId)).reduce((a,g)=>a+montoArs(g),0);
   const totalSubs=subs.filter(s=>String(s.pago)===String(tarjetaId)).reduce((a,s)=>a+montoArs(s),0);
   const pagoReal=Math.round((totalCuotas+totalSubs)*(1+INTERES_TARJETA));
   if(pagoReal<=0)return;
