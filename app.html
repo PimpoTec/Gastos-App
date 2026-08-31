@@ -2557,12 +2557,15 @@ async function eliminarCatActual(){
 }
 async function saveCierres(){
   tarjetas.filter(t=>t.esTarjeta).forEach(t=>{
-    const dia=fechaInputADia(document.getElementById('cierre-'+t.id)?.value);
+    const anterior=cierres[t.id];
+    const diaInput=fechaInputADia(document.getElementById('cierre-'+t.id)?.value);
     const inicio=fechaInputADia(document.getElementById('inicio-'+t.id)?.value);
     const vencimiento=fechaInputADia(document.getElementById('vencimiento-'+t.id)?.value);
     const limite=parseFloat(document.getElementById('limite-'+t.id)?.value);
+    // Si el campo "Cierre" quedó vacío por algún motivo, no se borra toda la
+    // config de la tarjeta: se mantiene el día que ya tenía guardado.
+    const dia=(diaInput>=1&&diaInput<=31)?diaInput:anterior?.dia;
     if(dia>=1&&dia<=31){
-      const anterior=cierres[t.id];
       const nuevo={dia,inicio:(inicio>=1&&inicio<=31)?inicio:null,vencimiento:(vencimiento>=1&&vencimiento<=31)?vencimiento:null,limite:(!isNaN(limite)&&limite>0)?limite:null};
       if(anterior?.dia&&anterior.dia!==dia){
         // Guardamos el día viejo para no "revivir" gastos que ya habían cerrado con esa fecha
