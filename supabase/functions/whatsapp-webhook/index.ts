@@ -1,12 +1,13 @@
 // Webhook de WhatsApp Cloud API: recibe mensajes de texto, los interpreta con
-// Claude, y carga el gasto correspondiente en la cuenta del usuario que
-// escribió (identificado por su número en whatsapp_usuarios).
+// Gemini (nivel gratuito), y carga el gasto correspondiente en la cuenta del
+// usuario que escribió (identificado por su número en whatsapp_usuarios).
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const WHATSAPP_TOKEN = Deno.env.get('WHATSAPP_TOKEN')!;
 const WHATSAPP_PHONE_NUMBER_ID = Deno.env.get('WHATSAPP_PHONE_NUMBER_ID')!;
 const WHATSAPP_VERIFY_TOKEN = Deno.env.get('WHATSAPP_VERIFY_TOKEN')!;
-const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')!;
+const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY')!;
+const GEMINI_MODEL = 'gemini-2.5-flash';
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
@@ -51,28 +52,26 @@ async function interpretarMensaje(
 Categorías disponibles del usuario: ${categorias.join(', ') || '(ninguna)'}
 Medios de pago disponibles del usuario: ${tarjetas.join(', ') || '(ninguno)'}
 
-Respondé ÚNICAMENTE un JSON (sin texto extra, sin markdown) con esta forma exacta:
+Respondé ÚNICAMENTE un JSON con esta forma exacta:
 {"monto": number, "descripcion": string, "categoria": string|null, "medio_pago": string|null, "moneda": "ARS"|"USD", "cuotas": number|null}
 
 - "categoria" y "medio_pago" tienen que ser EXACTAMENTE uno de los nombres de las listas de arriba (el que más se parezca), o null si no se menciona o no hay ninguno parecido.
 - "cuotas" es el número total de cuotas si lo menciona (ej: "en 3 cuotas" -> 3), si no null.
 - Si el mensaje no describe un gasto con un monto claro, respondé exactamente: {"error": "no_parseable"}`;
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'x-api-key': ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01',
-      'content-type': 'application/json',
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { responseMimeType: 'application/json' },
+      }),
     },
-    body: JSON.stringify({
-      model: 'claude-haiku-4-5',
-      max_tokens: 300,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  });
+  );
   const data = await res.json();
-  const raw = data?.content?.[0]?.text?.trim();
+  const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw);
