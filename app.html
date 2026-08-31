@@ -846,11 +846,10 @@
     <div class="modal-handle"></div>
     <div style="text-align:center;margin-bottom:20px">
       <svg class="icon" style="width:44px;height:44px;color:var(--accent);margin-bottom:10px"><use href="#i-card"></use></svg>
-      <div class="modal-title" style="text-align:center">¿Sigue el mismo cierre?</div>
-      <p style="font-size:14px;color:var(--muted);line-height:1.6"><strong style="color:var(--text)" id="recordatorio-cierre-tarjeta"></strong> acaba de cerrar. El día de cierre y de vencimiento a veces se corren de un mes a otro (fines de semana, feriados) — revisá que sigan siendo correctos.</p>
+      <div class="modal-title" style="text-align:center">Confirmá el cierre</div>
+      <p style="font-size:14px;color:var(--muted);line-height:1.6"><strong style="color:var(--text)" id="recordatorio-cierre-tarjeta"></strong> acaba de cerrar. El día de cierre y de vencimiento a veces se corren de un mes a otro (fines de semana, feriados) — antes de seguir, confirmá o actualizá esos datos para que los cálculos del próximo ciclo sean correctos.</p>
     </div>
-    <button class="btn-submit" onclick="closeModals();openCierres()">Revisar cierre y vencimiento</button>
-    <button class="btn-secondary" onclick="closeModals()">Sigue igual</button>
+    <button class="btn-submit" onclick="closeModals();openCierres()">Confirmar / actualizar cierre</button>
   </div>
 </div>
 
@@ -2219,7 +2218,9 @@ function selectColor(cid,c,ctx){
 }
 
 function closeModals(){document.querySelectorAll('.modal-overlay').forEach(m=>m.classList.remove('open'));}
-document.querySelectorAll('.modal-overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)closeModals();}));
+document.querySelectorAll('.modal-overlay').forEach(o=>o.addEventListener('click',e=>{
+  if(e.target===o&&o.id!=='modal-recordatorio-cierre')closeModals();
+}));
 
 // Interceptar botón atrás de Android
 // Cada vez que se abre un modal, pusheamos un estado al historial
@@ -2232,6 +2233,8 @@ function openModalWithHistory(modalId){
   pushModalHistory();
 }
 window.addEventListener('popstate', e => {
+  const recordatorioCierreAbierto = document.getElementById('modal-recordatorio-cierre')?.classList.contains('open');
+  if(recordatorioCierreAbierto){ pushModalHistory(); return; } // no se puede saltear con "atrás"
   const hayModalAbierto = [...document.querySelectorAll('.modal-overlay')].some(m=>m.classList.contains('open'));
   if(hayModalAbierto){
     closeModals();
@@ -2547,6 +2550,11 @@ async function saveCierres(){
     else delete cierres[t.id];
   });
   await dbGuardarConfig(cierres);closeModals();renderAll();
+  if(recordatorioCierrePendiente){
+    localStorage.setItem(recordatorioCierrePendiente.claveCierre,'shown');
+    recordatorioCierrePendiente=null;
+    setTimeout(checkRecordatorioCierre,300); // por si otra tarjeta también cerró y quedó pendiente
+  }
 }
 
 // ── Render ───────────────────────────────────────────
@@ -3575,6 +3583,8 @@ function checkRecordatorioMes(){
 // confirme que el día de cierre y de vencimiento siguen siendo los mismos
 // (el banco los corre seguido por fines de semana/feriados). Se guarda en
 // localStorage para no repetir el aviso más de una vez por cierre.
+let recordatorioCierrePendiente=null; // {claveCierre} — se marca resuelto recién al guardar, no al mostrar
+
 function checkRecordatorioCierre(){
   const hoy=new Date();hoy.setHours(0,0,0,0);
   const tarjetasConCierre=tarjetas.filter(t=>t.esTarjeta&&cierres[t.id]?.dia);
@@ -3591,7 +3601,7 @@ function checkRecordatorioCierre(){
     if(diasDesdeCierre<0||diasDesdeCierre>2)continue; // solo el cierre más reciente, primeros días
     const claveCierre=`recordatorio_cierre_${t.id}_${ultimoCierre.getFullYear()}-${ultimoCierre.getMonth()}`;
     if(localStorage.getItem(claveCierre))continue;
-    localStorage.setItem(claveCierre,'shown');
+    recordatorioCierrePendiente={claveCierre};
     document.getElementById('recordatorio-cierre-tarjeta').textContent=t.nombre;
     openModalWithHistory('modal-recordatorio-cierre');
     return; // uno solo por vez, para no encimar modales
