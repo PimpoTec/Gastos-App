@@ -2129,6 +2129,23 @@ function renderTipoAhorroChips(){
 
 function toggleCuotas(){document.getElementById('g-cuotas-detalles').style.display=document.getElementById('g-is-cuota').checked?'block':'none';}
 
+// Los campos de cierre/inicio/vencimiento se guardan como día del mes (1-31,
+// se repiten todos los meses), pero se editan con un <input type="date"> para
+// que el usuario elija con el calendario nativo en vez de tipear un número.
+// diaAFechaInput arma una fecha cualquiera (mes actual) solo para mostrar ese
+// día seleccionado en el calendario; fechaInputADia hace el camino inverso.
+function diaAFechaInput(dia){
+  if(!dia)return'';
+  const hoy=new Date();
+  const dias=new Date(hoy.getFullYear(),hoy.getMonth()+1,0).getDate();
+  const d=new Date(hoy.getFullYear(),hoy.getMonth(),Math.min(dia,dias));
+  return d.toISOString().slice(0,10);
+}
+function fechaInputADia(valor){
+  if(!valor)return NaN;
+  return new Date(valor+'T00:00:00').getDate();
+}
+
 function openCierres(){
   const tc=tarjetas.filter(t=>t.esTarjeta);
   if(!tc.length){alert('No tenés tarjetas de crédito. Andá a Perfil → Medios de pago.');return;}
@@ -2139,18 +2156,18 @@ function openCierres(){
       <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
         <div style="display:flex;align-items:center;gap:6px">
           <span style="font-size:11px;color:var(--muted)">Inicio</span>
-          <input type="number" id="inicio-${t.id}" min="1" max="31" inputmode="numeric" placeholder="auto" value="${cierres[t.id]?.inicio||''}"
-            style="width:56px;text-align:center;padding:6px;font-size:14px;font-weight:600;border:1px solid var(--border);background:var(--card);color:var(--text);border-radius:6px">
+          <input type="date" id="inicio-${t.id}" value="${diaAFechaInput(cierres[t.id]?.inicio)}"
+            style="width:132px;text-align:center;padding:6px;font-size:13px;font-weight:600;border:1px solid var(--border);background:var(--card);color:var(--text);border-radius:6px">
         </div>
         <div style="display:flex;align-items:center;gap:6px">
           <span style="font-size:11px;color:var(--muted)">Cierre</span>
-          <input type="number" id="cierre-${t.id}" min="1" max="31" inputmode="numeric" placeholder="—" value="${cierres[t.id]?.dia||''}"
-            style="width:56px;text-align:center;padding:6px;font-size:14px;font-weight:600;border:1px solid var(--border);background:var(--card);color:var(--text);border-radius:6px">
+          <input type="date" id="cierre-${t.id}" value="${diaAFechaInput(cierres[t.id]?.dia)}"
+            style="width:132px;text-align:center;padding:6px;font-size:13px;font-weight:600;border:1px solid var(--border);background:var(--card);color:var(--text);border-radius:6px">
         </div>
         <div style="display:flex;align-items:center;gap:6px">
           <span style="font-size:11px;color:var(--muted)">Vence</span>
-          <input type="number" id="vencimiento-${t.id}" min="1" max="31" inputmode="numeric" placeholder="—" value="${cierres[t.id]?.vencimiento||''}"
-            style="width:56px;text-align:center;padding:6px;font-size:14px;font-weight:600;border:1px solid var(--border);background:var(--card);color:var(--text);border-radius:6px">
+          <input type="date" id="vencimiento-${t.id}" value="${diaAFechaInput(cierres[t.id]?.vencimiento)}"
+            style="width:132px;text-align:center;padding:6px;font-size:13px;font-weight:600;border:1px solid var(--border);background:var(--card);color:var(--text);border-radius:6px">
         </div>
         <div style="display:flex;align-items:center;gap:6px">
           <span style="font-size:11px;color:var(--muted)">Límite $</span>
@@ -2540,9 +2557,9 @@ async function eliminarCatActual(){
 }
 async function saveCierres(){
   tarjetas.filter(t=>t.esTarjeta).forEach(t=>{
-    const dia=parseInt(document.getElementById('cierre-'+t.id)?.value);
-    const inicio=parseInt(document.getElementById('inicio-'+t.id)?.value);
-    const vencimiento=parseInt(document.getElementById('vencimiento-'+t.id)?.value);
+    const dia=fechaInputADia(document.getElementById('cierre-'+t.id)?.value);
+    const inicio=fechaInputADia(document.getElementById('inicio-'+t.id)?.value);
+    const vencimiento=fechaInputADia(document.getElementById('vencimiento-'+t.id)?.value);
     const limite=parseFloat(document.getElementById('limite-'+t.id)?.value);
     if(dia>=1&&dia<=31){
       const anterior=cierres[t.id];
