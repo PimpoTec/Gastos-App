@@ -1831,7 +1831,16 @@ function getCat(id,tipo){return cats.find(c=>c.id==id&&c.tipo===tipo)||cats.find
 function getCatIngreso(id){return CATS_INGRESO.find(c=>c.id===id)||CATS_INGRESO[CATS_INGRESO.length-1];}
 
 // diaInicio es el día del mes en que arranca el período (no el de cierre).
-function inicioPeriodoBase(diaInicio,dH){const diaH=dH.getDate();if(diaH>=diaInicio)return new Date(dH.getFullYear(),dH.getMonth(),diaInicio);const ms=new Date(dH.getFullYear(),dH.getMonth()-1,1);return new Date(ms.getFullYear(),ms.getMonth(),diaInicio);}
+// Cuántos días tiene un mes (0=enero); clampDia evita que un día como 31 en
+// un mes de 30 (o 28/29 en febrero) desborde al mes siguiente sin querer.
+function diasEnMes(anio,mes){return new Date(anio,mes+1,0).getDate();}
+function clampDia(anio,mes,dia){return Math.min(dia,diasEnMes(anio,mes));}
+function inicioPeriodoBase(diaInicio,dH){
+  const diaH=dH.getDate();
+  if(diaH>=diaInicio)return new Date(dH.getFullYear(),dH.getMonth(),clampDia(dH.getFullYear(),dH.getMonth(),diaInicio));
+  const ms=new Date(dH.getFullYear(),dH.getMonth()-1,1);
+  return new Date(ms.getFullYear(),ms.getMonth(),clampDia(ms.getFullYear(),ms.getMonth(),diaInicio));
+}
 // cfg puede ser un número (día de cierre) o el objeto {dia,inicio,diaAnterior,cambiadoEl} guardado en cierres[tId].
 // Si el día de cierre cambió hace poco, evita "revivir" gastos que ya habían cerrado con el día anterior.
 // "inicio" es opcional: si no está seteado, el período arranca el día siguiente al cierre.
@@ -1849,14 +1858,32 @@ function inicioPeriodo(cfg,dH=new Date()){
   const alt=inicioPeriodoBase(diaAnterior+1,dH);
   return alt>base?alt:base;
 }
-function proximoCierreFecha(d,dH=new Date()){const f=new Date(dH.getFullYear(),dH.getMonth(),d);if(dH.getDate()>d)f.setMonth(f.getMonth()+1);return f;}
+function proximoCierreFecha(d,dH=new Date()){
+  const f=new Date(dH.getFullYear(),dH.getMonth(),clampDia(dH.getFullYear(),dH.getMonth(),d));
+  if(dH.getDate()>d){
+    const sig=new Date(dH.getFullYear(),dH.getMonth()+1,1);
+    return new Date(sig.getFullYear(),sig.getMonth(),clampDia(sig.getFullYear(),sig.getMonth(),d));
+  }
+  return f;
+}
+// Suma un mes a (anio,mes) y devuelve el cierre de ESE mes, re-clampeado a
+// diaCierre cada vez (no arrastra el día ya recortado de un mes corto: si
+// diaCierre=31, después de "28 de febrero" el mes siguiente vuelve a ser 31,
+// no 28+1). Evita el desborde de setMonth() sobre un día que no existe.
+function sumarMesCierre(anio,mes,diaCierre){
+  const norm=new Date(anio,mes+1,1);
+  return new Date(norm.getFullYear(),norm.getMonth(),clampDia(norm.getFullYear(),norm.getMonth(),diaCierre));
+}
 function calcularCuotaActual(fechaCompra,diaCierre,fechaReferencia=null){
   const fC=new Date(fechaCompra+'T00:00:00');
   const ref=fechaReferencia?new Date(fechaReferencia):new Date();
   ref.setHours(0,0,0,0);
-  let pC=new Date(fC.getFullYear(),fC.getMonth(),diaCierre);
-  if(fC.getDate()>diaCierre)pC.setMonth(pC.getMonth()+1);
-  let ev=new Date(pC),n=0;while(ev<ref){n++;ev.setMonth(ev.getMonth()+1);}return n+1;
+  let pC=fC.getDate()>diaCierre
+    ? sumarMesCierre(fC.getFullYear(),fC.getMonth(),diaCierre)
+    : new Date(fC.getFullYear(),fC.getMonth(),clampDia(fC.getFullYear(),fC.getMonth(),diaCierre));
+  let ev=pC,n=0;
+  while(ev<ref){n++;ev=sumarMesCierre(ev.getFullYear(),ev.getMonth(),diaCierre);}
+  return n+1;
 }
 
 // ── UI ───────────────────────────────────────────────
