@@ -1012,7 +1012,7 @@
   <div class="modal">
     <div class="modal-handle"></div>
     <div class="modal-title">Cierres y vencimientos</div>
-    <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.5">Solo para tarjetas de crédito. El día de cierre y el de vencimiento pueden moverse un poco de un mes a otro (fines de semana, feriados) — si tu banco los cambió, actualizalos acá.</p>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.5">Solo para tarjetas de crédito. El día de cierre y el de vencimiento pueden moverse un poco de un mes a otro (fines de semana, feriados) — si tu banco los cambió, actualizalos acá. "Inicio" es opcional: si lo dejás vacío, el período arranca solo al día siguiente del cierre; completalo solo si tu ciclo no funciona así.</p>
     <div id="cierre-list"></div>
     <button class="btn-submit" onclick="saveCierres()">Guardar</button>
     <button class="btn-secondary" onclick="closeModals()">Cancelar</button>
@@ -1498,7 +1498,8 @@ function totalCicloTarjeta(tarjetaId,mesCierre){
   const hasta=new Date(mesCierre.getFullYear(),mesCierre.getMonth(),Math.min(cfg.dia,diasEnMes));
   const mesAnterior=new Date(mesCierre.getFullYear(),mesCierre.getMonth()-1,1);
   const diasMesAnterior=new Date(mesAnterior.getFullYear(),mesAnterior.getMonth()+1,0).getDate();
-  const desde=new Date(mesAnterior.getFullYear(),mesAnterior.getMonth(),Math.min(cfg.dia,diasMesAnterior)+1);
+  const diaInicio=cfg.inicio?Math.min(cfg.inicio,diasMesAnterior):Math.min(cfg.dia,diasMesAnterior)+1;
+  const desde=new Date(mesAnterior.getFullYear(),mesAnterior.getMonth(),diaInicio);
   const refCierre=hasta;
   const montoArs=g=>g.moneda==='USD'?(dolarBlue>0?g.monto*dolarBlue:0):g.monto;
   return gastos.filter(g=>String(g.pago)===String(tarjetaId)).reduce((total,g)=>{
@@ -1829,12 +1830,15 @@ function getTarjeta(id){return tarjetas.find(t=>t.id==id)||{nombre:'?',icono:'ca
 function getCat(id,tipo){return cats.find(c=>c.id==id&&c.tipo===tipo)||cats.find(c=>c.id==id)||{nombre:'?',icono:'box',color:'#B4B2A9'};}
 function getCatIngreso(id){return CATS_INGRESO.find(c=>c.id===id)||CATS_INGRESO[CATS_INGRESO.length-1];}
 
-function inicioPeriodoBase(d,dH){const diaH=dH.getDate();if(diaH>d)return new Date(dH.getFullYear(),dH.getMonth(),d+1);const ms=new Date(dH.getFullYear(),dH.getMonth()-1,1);return new Date(ms.getFullYear(),ms.getMonth(),d+1);}
-// cfg puede ser un número (día de cierre) o el objeto {dia,diaAnterior,cambiadoEl} guardado en cierres[tId].
+// diaInicio es el día del mes en que arranca el período (no el de cierre).
+function inicioPeriodoBase(diaInicio,dH){const diaH=dH.getDate();if(diaH>=diaInicio)return new Date(dH.getFullYear(),dH.getMonth(),diaInicio);const ms=new Date(dH.getFullYear(),dH.getMonth()-1,1);return new Date(ms.getFullYear(),ms.getMonth(),diaInicio);}
+// cfg puede ser un número (día de cierre) o el objeto {dia,inicio,diaAnterior,cambiadoEl} guardado en cierres[tId].
 // Si el día de cierre cambió hace poco, evita "revivir" gastos que ya habían cerrado con el día anterior.
+// "inicio" es opcional: si no está seteado, el período arranca el día siguiente al cierre.
 function inicioPeriodo(cfg,dH=new Date()){
   const d=typeof cfg==='object'?cfg.dia:cfg;
-  const base=inicioPeriodoBase(d,dH);
+  const diaInicio=(typeof cfg==='object'&&cfg.inicio)?cfg.inicio:d+1;
+  const base=inicioPeriodoBase(diaInicio,dH);
   const diaAnterior=typeof cfg==='object'?cfg.diaAnterior:null;
   const cambiadoEl=typeof cfg==='object'?cfg.cambiadoEl:null;
   if(!diaAnterior||!cambiadoEl)return base;
@@ -1842,7 +1846,7 @@ function inicioPeriodo(cfg,dH=new Date()){
   let primerCierreNuevo=new Date(cambio.getFullYear(),cambio.getMonth(),d);
   if(primerCierreNuevo<cambio)primerCierreNuevo.setMonth(primerCierreNuevo.getMonth()+1);
   if(dH>primerCierreNuevo)return base; // ya pasó el primer cierre con el día nuevo: el anterior ya no aplica
-  const alt=inicioPeriodoBase(diaAnterior,dH);
+  const alt=inicioPeriodoBase(diaAnterior+1,dH);
   return alt>base?alt:base;
 }
 function proximoCierreFecha(d,dH=new Date()){const f=new Date(dH.getFullYear(),dH.getMonth(),d);if(dH.getDate()>d)f.setMonth(f.getMonth()+1);return f;}
@@ -2133,6 +2137,11 @@ function openCierres(){
       <div class="ico" style="background:${t.color}22">${ic(t.icono)}</div>
       <div class="name">${t.nombre}</div>
       <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:11px;color:var(--muted)">Inicio</span>
+          <input type="number" id="inicio-${t.id}" min="1" max="31" inputmode="numeric" placeholder="auto" value="${cierres[t.id]?.inicio||''}"
+            style="width:56px;text-align:center;padding:6px;font-size:14px;font-weight:600;border:1px solid var(--border);background:var(--card);color:var(--text);border-radius:6px">
+        </div>
         <div style="display:flex;align-items:center;gap:6px">
           <span style="font-size:11px;color:var(--muted)">Cierre</span>
           <input type="number" id="cierre-${t.id}" min="1" max="31" inputmode="numeric" placeholder="—" value="${cierres[t.id]?.dia||''}"
@@ -2532,11 +2541,12 @@ async function eliminarCatActual(){
 async function saveCierres(){
   tarjetas.filter(t=>t.esTarjeta).forEach(t=>{
     const dia=parseInt(document.getElementById('cierre-'+t.id)?.value);
+    const inicio=parseInt(document.getElementById('inicio-'+t.id)?.value);
     const vencimiento=parseInt(document.getElementById('vencimiento-'+t.id)?.value);
     const limite=parseFloat(document.getElementById('limite-'+t.id)?.value);
     if(dia>=1&&dia<=31){
       const anterior=cierres[t.id];
-      const nuevo={dia,vencimiento:(vencimiento>=1&&vencimiento<=31)?vencimiento:null,limite:(!isNaN(limite)&&limite>0)?limite:null};
+      const nuevo={dia,inicio:(inicio>=1&&inicio<=31)?inicio:null,vencimiento:(vencimiento>=1&&vencimiento<=31)?vencimiento:null,limite:(!isNaN(limite)&&limite>0)?limite:null};
       if(anterior?.dia&&anterior.dia!==dia){
         // Guardamos el día viejo para no "revivir" gastos que ya habían cerrado con esa fecha
         nuevo.diaAnterior=anterior.dia;
