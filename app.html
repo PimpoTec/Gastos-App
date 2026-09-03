@@ -847,7 +847,7 @@
     <div style="text-align:center;margin-bottom:20px">
       <svg class="icon" style="width:44px;height:44px;color:var(--accent);margin-bottom:10px"><use href="#i-card"></use></svg>
       <div class="modal-title" style="text-align:center">Confirmá el cierre</div>
-      <p style="font-size:14px;color:var(--muted);line-height:1.6"><strong style="color:var(--text)" id="recordatorio-cierre-tarjeta"></strong> acaba de cerrar. El día de cierre y de vencimiento a veces se corren de un mes a otro (fines de semana, feriados) — antes de seguir, confirmá o actualizá esos datos para que los cálculos del próximo ciclo sean correctos.</p>
+      <p style="font-size:14px;color:var(--muted);line-height:1.6"><strong style="color:var(--text)" id="recordatorio-cierre-tarjeta"></strong> ya cerró, así que arranqué el ciclo nuevo estimando la fecha del próximo cierre:<br><strong style="color:var(--text)" id="recordatorio-cierre-estimado"></strong><br>Confirmá esa fecha (o corregila con la real de tu resumen) para que las cuentas del ciclo salgan bien.</p>
     </div>
     <button class="btn-submit" onclick="closeModals();openCierres()">Confirmar / actualizar cierre</button>
   </div>
@@ -1012,7 +1012,7 @@
   <div class="modal">
     <div class="modal-handle"></div>
     <div class="modal-title">Cierres y vencimientos</div>
-    <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.5">Solo para tarjetas de crédito. El día de cierre y el de vencimiento pueden moverse un poco de un mes a otro (fines de semana, feriados) — si tu banco los cambió, actualizalos acá. "Inicio" es opcional: si lo dejás vacío, el período arranca solo al día siguiente del cierre; completalo solo si tu ciclo no funciona así.</p>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.5">Solo para tarjetas de crédito. "Inicio" y "Cierre" son las fechas reales del ciclo que estás transitando ahora (tal cual figuran en tu resumen). Cuando pase el cierre, la app arranca el ciclo siguiente sola y te pide confirmar la fecha del próximo cierre. "Vence" es el día del mes del vencimiento.</p>
     <div id="cierre-list"></div>
     <button class="btn-submit" onclick="saveCierres()">Guardar</button>
     <button class="btn-secondary" onclick="closeModals()">Cancelar</button>
@@ -1498,8 +1498,7 @@ function totalCicloTarjeta(tarjetaId,mesCierre){
   const hasta=new Date(mesCierre.getFullYear(),mesCierre.getMonth(),Math.min(cfg.dia,diasEnMes));
   const mesAnterior=new Date(mesCierre.getFullYear(),mesCierre.getMonth()-1,1);
   const diasMesAnterior=new Date(mesAnterior.getFullYear(),mesAnterior.getMonth()+1,0).getDate();
-  const diaInicio=cfg.inicio?Math.min(cfg.inicio,diasMesAnterior):Math.min(cfg.dia,diasMesAnterior)+1;
-  const desde=new Date(mesAnterior.getFullYear(),mesAnterior.getMonth(),diaInicio);
+  const desde=new Date(mesAnterior.getFullYear(),mesAnterior.getMonth(),Math.min(cfg.dia,diasMesAnterior)+1);
   const refCierre=hasta;
   const montoArs=g=>g.moneda==='USD'?(dolarBlue>0?g.monto*dolarBlue:0):g.monto;
   return gastos.filter(g=>String(g.pago)===String(tarjetaId)).reduce((total,g)=>{
@@ -1841,12 +1840,56 @@ function inicioPeriodoBase(diaInicio,dH){
   const ms=new Date(dH.getFullYear(),dH.getMonth()-1,1);
   return new Date(ms.getFullYear(),ms.getMonth(),clampDia(ms.getFullYear(),ms.getMonth(),diaInicio));
 }
-// cfg puede ser un número (día de cierre) o el objeto {dia,inicio,diaAnterior,cambiadoEl} guardado en cierres[tId].
+// ── Ciclo de tarjeta por fechas reales ───────────────
+// cicloInicio y cicloCierre son fechas concretas ('YYYY-MM-DD'), no un día del
+// mes: un ciclo real puede ir del 27/8 al 1/10 y eso no se puede expresar con
+// un solo número. Cuando el cierre ya pasó, el ciclo avanza solo (el nuevo
+// inicio es el día siguiente al cierre) y queda marcado como pendiente para
+// que el usuario confirme la fecha real del próximo cierre.
+function aFecha(iso){return iso?new Date(iso+'T00:00:00'):null;}
+function aISO(d){
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function sumarDias(d,n){return new Date(d.getFullYear(),d.getMonth(),d.getDate()+n);}
+function sumarMesesFecha(d,n){
+  const norm=new Date(d.getFullYear(),d.getMonth()+n,1);
+  return new Date(norm.getFullYear(),norm.getMonth(),clampDia(norm.getFullYear(),norm.getMonth(),d.getDate()));
+}
+
+// Devuelve {desde,hasta,pendiente} del ciclo vigente a la fecha dH.
+function cicloActual(cfg,dH=new Date()){
+  if(!cfg||typeof cfg!=='object')return null;
+  let desde=aFecha(cfg.cicloInicio),hasta=aFecha(cfg.cicloCierre);
+  if(!desde||!hasta){
+    // Config vieja (solo día del mes): se deriva el ciclo actual de ese día.
+    if(!cfg.dia)return null;
+    hasta=proximoCierreFecha(cfg.dia,dH);
+    desde=sumarDias(sumarMesesFecha(hasta,-1),1);
+    return{desde,hasta,pendiente:false};
+  }
+  const hoy=new Date(dH.getFullYear(),dH.getMonth(),dH.getDate());
+  let pendiente=false;
+  // El cierre ya pasó: avanzar de a un ciclo hasta alcanzar el vigente.
+  let guarda=0;
+  while(hoy>hasta&&guarda++<60){
+    desde=sumarDias(hasta,1);
+    hasta=sumarMesesFecha(hasta,1);
+    pendiente=true; // la fecha del nuevo cierre es estimada hasta que la confirmen
+  }
+  return{desde,hasta,pendiente};
+}
+function cierreDelPeriodo(cfg,dH=new Date()){
+  const c=cicloActual(cfg,dH);
+  return c?c.hasta:proximoCierreFecha(typeof cfg==='object'?cfg.dia:cfg,dH);
+}
+
+// cfg puede ser un número (día de cierre) o el objeto {dia,cicloInicio,cicloCierre,diaAnterior,cambiadoEl} guardado en cierres[tId].
 // Si el día de cierre cambió hace poco, evita "revivir" gastos que ya habían cerrado con el día anterior.
-// "inicio" es opcional: si no está seteado, el período arranca el día siguiente al cierre.
 function inicioPeriodo(cfg,dH=new Date()){
+  const ciclo=cicloActual(cfg,dH);
+  if(ciclo&&typeof cfg==='object'&&cfg.cicloInicio)return ciclo.desde;
   const d=typeof cfg==='object'?cfg.dia:cfg;
-  const diaInicio=(typeof cfg==='object'&&cfg.inicio)?cfg.inicio:d+1;
+  const diaInicio=d+1;
   const base=inicioPeriodoBase(diaInicio,dH);
   const diaAnterior=typeof cfg==='object'?cfg.diaAnterior:null;
   const cambiadoEl=typeof cfg==='object'?cfg.cambiadoEl:null;
@@ -2156,21 +2199,26 @@ function renderTipoAhorroChips(){
 
 function toggleCuotas(){document.getElementById('g-cuotas-detalles').style.display=document.getElementById('g-is-cuota').checked?'block':'none';}
 
-// Los campos de cierre/inicio/vencimiento se guardan como día del mes (1-31,
-// se repiten todos los meses), pero se editan con un <input type="date"> para
-// que el usuario elija con el calendario nativo en vez de tipear un número.
-// diaAFechaInput arma una fecha cualquiera (mes actual) solo para mostrar ese
-// día seleccionado en el calendario; fechaInputADia hace el camino inverso.
+// El vencimiento sigue siendo un día del mes (se repite todos los meses); se
+// edita con calendario y solo se guarda el día. Ojo: NO se clampea al mes
+// actual al mostrarlo, porque eso pisaba un 31 guardado con un 30 al guardar
+// desde un mes corto.
 function diaAFechaInput(dia){
   if(!dia)return'';
   const hoy=new Date();
-  const dias=new Date(hoy.getFullYear(),hoy.getMonth()+1,0).getDate();
-  const d=new Date(hoy.getFullYear(),hoy.getMonth(),Math.min(dia,dias));
-  return d.toISOString().slice(0,10);
+  let mes=hoy.getMonth(),anio=hoy.getFullYear();
+  while(dia>diasEnMes(anio,mes)){const n=new Date(anio,mes+1,1);anio=n.getFullYear();mes=n.getMonth();}
+  return aISO(new Date(anio,mes,dia));
 }
 function fechaInputADia(valor){
   if(!valor)return NaN;
   return new Date(valor+'T00:00:00').getDate();
+}
+
+// Ciclo vigente de una tarjeta, ya en formato de <input type="date">.
+function cicloDe(tarjetaId){
+  const c=cicloActual(cierres[tarjetaId]);
+  return c?{desdeISO:aISO(c.desde),hastaISO:aISO(c.hasta),pendiente:c.pendiente}:null;
 }
 
 function openCierres(){
@@ -2183,12 +2231,12 @@ function openCierres(){
       <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
         <div style="display:flex;align-items:center;gap:6px">
           <span style="font-size:11px;color:var(--muted)">Inicio</span>
-          <input type="date" id="inicio-${t.id}" value="${diaAFechaInput(cierres[t.id]?.inicio)}"
+          <input type="date" id="inicio-${t.id}" value="${cicloDe(t.id)?.desdeISO||''}"
             style="width:132px;text-align:center;padding:6px;font-size:13px;font-weight:600;border:1px solid var(--border);background:var(--card);color:var(--text);border-radius:6px">
         </div>
         <div style="display:flex;align-items:center;gap:6px">
           <span style="font-size:11px;color:var(--muted)">Cierre</span>
-          <input type="date" id="cierre-${t.id}" value="${diaAFechaInput(cierres[t.id]?.dia)}"
+          <input type="date" id="cierre-${t.id}" value="${cicloDe(t.id)?.hastaISO||''}"
             style="width:132px;text-align:center;padding:6px;font-size:13px;font-weight:600;border:1px solid var(--border);background:var(--card);color:var(--text);border-radius:6px">
         </div>
         <div style="display:flex;align-items:center;gap:6px">
@@ -2584,27 +2632,32 @@ async function eliminarCatActual(){
 }
 async function saveCierres(){
   tarjetas.filter(t=>t.esTarjeta).forEach(t=>{
-    const anterior=cierres[t.id];
-    const diaInput=fechaInputADia(document.getElementById('cierre-'+t.id)?.value);
-    const inicio=fechaInputADia(document.getElementById('inicio-'+t.id)?.value);
+    const anterior=cierres[t.id]||{};
+    const inicioISO=document.getElementById('inicio-'+t.id)?.value||'';
+    const cierreISO=document.getElementById('cierre-'+t.id)?.value||'';
     const vencimiento=fechaInputADia(document.getElementById('vencimiento-'+t.id)?.value);
     const limite=parseFloat(document.getElementById('limite-'+t.id)?.value);
-    // Si el campo "Cierre" quedó vacío por algún motivo, no se borra toda la
-    // config de la tarjeta: se mantiene el día que ya tenía guardado.
-    const dia=(diaInput>=1&&diaInput<=31)?diaInput:anterior?.dia;
-    if(dia>=1&&dia<=31){
-      const nuevo={dia,inicio:(inicio>=1&&inicio<=31)?inicio:null,vencimiento:(vencimiento>=1&&vencimiento<=31)?vencimiento:null,limite:(!isNaN(limite)&&limite>0)?limite:null};
-      if(anterior?.dia&&anterior.dia!==dia){
-        // Guardamos el día viejo para no "revivir" gastos que ya habían cerrado con esa fecha
-        nuevo.diaAnterior=anterior.dia;
-        nuevo.cambiadoEl=today();
-      }else if(anterior?.diaAnterior&&anterior?.cambiadoEl){
-        nuevo.diaAnterior=anterior.diaAnterior;
-        nuevo.cambiadoEl=anterior.cambiadoEl;
-      }
-      cierres[t.id]=nuevo;
+    // Vacío = no se toca lo que ya estaba guardado (nunca se borra la config sola).
+    const cicloCierre=cierreISO||anterior.cicloCierre||null;
+    const cicloInicio=inicioISO||anterior.cicloInicio||null;
+    if(!cicloCierre&&!anterior.dia)return;
+    const nuevo={
+      cicloInicio,cicloCierre,
+      // dia sigue existiendo: es el día del mes que usan los cálculos de cuotas
+      // para proyectar ciclos futuros. Se deriva del cierre cargado.
+      dia:cicloCierre?aFecha(cicloCierre).getDate():anterior.dia,
+      vencimiento:(vencimiento>=1&&vencimiento<=31)?vencimiento:null,
+      limite:(!isNaN(limite)&&limite>0)?limite:null,
+    };
+    if(anterior.dia&&anterior.dia!==nuevo.dia){
+      // Guardamos el día viejo para no "revivir" gastos que ya habían cerrado con esa fecha
+      nuevo.diaAnterior=anterior.dia;
+      nuevo.cambiadoEl=today();
+    }else if(anterior.diaAnterior&&anterior.cambiadoEl){
+      nuevo.diaAnterior=anterior.diaAnterior;
+      nuevo.cambiadoEl=anterior.cambiadoEl;
     }
-    else delete cierres[t.id];
+    cierres[t.id]=nuevo;
   });
   await dbGuardarConfig(cierres);closeModals();renderAll();
   if(recordatorioCierrePendiente){
@@ -2760,7 +2813,7 @@ function updateHero(){
 
 function getGastosPeriodoActual(tId,gList){
   const cfg=cierres[tId];if(!cfg?.dia)return{ars:0,usd:0,subsPendArs:0,subsPendUsd:0};
-  const desde=inicioPeriodo(cfg),hasta=proximoCierreFecha(cfg.dia);
+  const desde=inicioPeriodo(cfg),hasta=cierreDelPeriodo(cfg);
   let ars=0,usd=0,subsPendArs=0,subsPendUsd=0;
   // Gastos normales
   gList.filter(g=>{
@@ -2797,7 +2850,7 @@ function renderDashboard(){
   const INTERES=INTERES_TARJETA;
   const hoy=new Date();let eventos=[];
   tarjetas.filter(t=>t.esTarjeta&&cierres[t.id]).forEach(t=>{
-    const fC=proximoCierreFecha(cierres[t.id].dia);
+    const fC=cierreDelPeriodo(cierres[t.id]);
     const diff=Math.ceil((fC-hoy)/(1000*60*60*24));
     eventos.push({tipo:'tarjeta',nombre:t.nombre,color:t.color,diff,ico:t.icono});
   });
@@ -2821,7 +2874,7 @@ function renderDashboard(){
     const totalArsConUSD=ars+usdEnArs+subsPendArs+subsPendUsdEnArs;
     const interes=Math.round(totalArsConUSD*INTERES);
     const totalConInteres=totalArsConUSD+interes;
-    const fDesde=inicioPeriodo(cfg),fHasta=proximoCierreFecha(cfg.dia);
+    const fDesde=inicioPeriodo(cfg),fHasta=cierreDelPeriodo(cfg);
     const strDesde=fDesde.toLocaleDateString('es-AR',{day:'numeric',month:'short'});
     const strHasta=fHasta.toLocaleDateString('es-AR',{day:'numeric',month:'short'});
     const diff=Math.ceil((fHasta-new Date())/(1000*60*60*24));
@@ -2944,7 +2997,7 @@ function renderDetalleTarjeta(){
     return;
   }
   const ref=refDetalleTarjeta(offsetPeriodoDetalle);
-  const desde=inicioPeriodo(cfg,ref),hasta=proximoCierreFecha(cfg.dia,ref);
+  const desde=inicioPeriodo(cfg,ref),hasta=cierreDelPeriodo(cfg,ref);
   const strDesde=desde.toLocaleDateString('es-AR',{day:'numeric',month:'short'});
   const strHasta=hasta.toLocaleDateString('es-AR',{day:'numeric',month:'short',year:'numeric'});
   document.getElementById('dt-periodo').textContent=`${strDesde} → ${strHasta}`;
@@ -3642,24 +3695,20 @@ function checkRecordatorioMes(){
 // localStorage para no repetir el aviso más de una vez por cierre.
 let recordatorioCierrePendiente=null; // {claveCierre} — se marca resuelto recién al guardar, no al mostrar
 
+// Si el ciclo de una tarjeta ya cerró, avanzó solo y la fecha del nuevo cierre
+// es estimada: hay que pedirle al usuario que confirme la fecha real.
 function checkRecordatorioCierre(){
-  const hoy=new Date();hoy.setHours(0,0,0,0);
-  const tarjetasConCierre=tarjetas.filter(t=>t.esTarjeta&&cierres[t.id]?.dia);
+  const tarjetasConCierre=tarjetas.filter(t=>t.esTarjeta&&cierres[t.id]);
   for(const t of tarjetasConCierre){
-    const dia=cierres[t.id].dia;
-    const diasEsteMes=new Date(hoy.getFullYear(),hoy.getMonth()+1,0).getDate();
-    let ultimoCierre=new Date(hoy.getFullYear(),hoy.getMonth(),Math.min(dia,diasEsteMes));
-    if(ultimoCierre>hoy){
-      const mesAnt=new Date(hoy.getFullYear(),hoy.getMonth()-1,1);
-      const diasMesAnt=new Date(mesAnt.getFullYear(),mesAnt.getMonth()+1,0).getDate();
-      ultimoCierre=new Date(mesAnt.getFullYear(),mesAnt.getMonth(),Math.min(dia,diasMesAnt));
-    }
-    const diasDesdeCierre=Math.round((hoy-ultimoCierre)/86400000);
-    if(diasDesdeCierre<0||diasDesdeCierre>2)continue; // solo el cierre más reciente, primeros días
-    const claveCierre=`recordatorio_cierre_${t.id}_${ultimoCierre.getFullYear()}-${ultimoCierre.getMonth()}`;
+    const ciclo=cicloActual(cierres[t.id]);
+    if(!ciclo||!ciclo.pendiente)continue;
+    const claveCierre=`recordatorio_cierre_${t.id}_${aISO(ciclo.hasta)}`;
     if(localStorage.getItem(claveCierre))continue;
     recordatorioCierrePendiente={claveCierre};
     document.getElementById('recordatorio-cierre-tarjeta').textContent=t.nombre;
+    document.getElementById('recordatorio-cierre-estimado').textContent=
+      ciclo.desde.toLocaleDateString('es-AR',{day:'numeric',month:'long'})+' → '+
+      ciclo.hasta.toLocaleDateString('es-AR',{day:'numeric',month:'long'});
     openModalWithHistory('modal-recordatorio-cierre');
     return; // uno solo por vez, para no encimar modales
   }

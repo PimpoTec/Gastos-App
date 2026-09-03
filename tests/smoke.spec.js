@@ -10,7 +10,10 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(mockSupabase, defaultState());
   await page.goto('/app.html');
   await page.waitForSelector('#nav-gastos', { state: 'visible', timeout: 10000 });
-  // Cierra cualquier modal de bienvenida/onboarding que pueda tapar la UI.
+  // La app abre modales de bienvenida/recordatorio con setTimeout (hasta 1200ms
+  // después de cargar). Hay que esperarlos antes de cerrarlos, si no se vuelven
+  // a abrir en medio del test y tapan los clicks.
+  await page.waitForTimeout(1500);
   await page.evaluate(() => {
     document.querySelectorAll('.modal-overlay').forEach((m) => m.classList.remove('open'));
   });
