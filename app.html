@@ -1478,7 +1478,7 @@ function cuotasEnCiclo(mesCierre){
     const dc=cierres[g.pago]?.dia||31;
     const diasEnMes=new Date(mesCierre.getFullYear(),mesCierre.getMonth()+1,0).getDate();
     const refCierre=new Date(mesCierre.getFullYear(),mesCierre.getMonth(),Math.min(dc,diasEnMes));
-    return{...g,numCuota:calcularCuotaActual(g.fecha,dc,refCierre)};
+    return{...g,numCuota:calcularCuotaActual(g.fecha,cierres[g.pago]||dc,refCierre)};
   }).filter(g=>g.numCuota>=1&&g.numCuota<=g.cuotas);
 }
 
@@ -1503,7 +1503,7 @@ function totalCicloTarjeta(tarjetaId,mesCierre){
   const montoArs=g=>g.moneda==='USD'?(dolarBlue>0?g.monto*dolarBlue:0):g.monto;
   const totalGastos=gastos.filter(g=>String(g.pago)===String(tarjetaId)).reduce((total,g)=>{
     if(g.cuotas){
-      const n=calcularCuotaActual(g.fecha,cfg.dia,refCierre);
+      const n=calcularCuotaActual(g.fecha,cfg,refCierre);
       return(n>=1&&n<=g.cuotas)?total+montoArs(g):total;
     }
     const fd=new Date(g.fecha+'T00:00:00');
@@ -1918,15 +1918,52 @@ function sumarMesCierre(anio,mes,diaCierre){
   const norm=new Date(anio,mes+1,1);
   return new Date(norm.getFullYear(),norm.getMonth(),clampDia(norm.getFullYear(),norm.getMonth(),diaCierre));
 }
-function calcularCuotaActual(fechaCompra,diaCierre,fechaReferencia=null){
+function cierreEnMes(anio,mes,dia){return new Date(anio,mes,clampDia(anio,mes,dia));}
+
+// Primer cierre que cubre a una compra, anclado en la fecha real de cierre del
+// ciclo. Sin este ancla, la secuencia de cierres se arma como "día N de todos
+// los meses", y si el ciclo real no cae así (ej. 28/8 → 1/10) se cuenta un
+// cierre que nunca existió y todas las cuotas quedan corridas una de más.
+function primerCierreDeCompra(fC,cfg,diaCierre){
+  const ancla=(cfg&&typeof cfg==='object'&&cfg.cicloCierre)?aFecha(cfg.cicloCierre):null;
+  if(!ancla){
+    return fC.getDate()>diaCierre
+      ? sumarMesCierre(fC.getFullYear(),fC.getMonth(),diaCierre)
+      : cierreEnMes(fC.getFullYear(),fC.getMonth(),diaCierre);
+  }
+  // El inicio del ciclo es el día siguiente al cierre anterior, así que ese
+  // cierre anterior es un dato real y no hay que inferirlo por día del mes.
+  const cierreAnterior=cfg.cicloInicio?sumarDias(aFecha(cfg.cicloInicio),-1):null;
+  if(cierreAnterior&&fC>cierreAnterior&&fC<=ancla)return ancla; // compra dentro del ciclo vigente
+  if(fC>ancla){ // futuro: se asume mensual desde el cierre conocido
+    let c=ancla,guarda=0;
+    while(c<fC&&guarda++<600)c=sumarMesCierre(c.getFullYear(),c.getMonth(),ancla.getDate());
+    return c;
+  }
+  // Pasado: se retrocede mensualmente desde el cierre anterior conocido.
+  const base=cierreAnterior||ancla,dia=base.getDate();
+  let anio=base.getFullYear(),mes=base.getMonth(),c=base,guarda=0;
+  while(c>=fC&&guarda++<600){
+    const p=new Date(anio,mes-1,1);anio=p.getFullYear();mes=p.getMonth();
+    const prev=cierreEnMes(anio,mes,dia);
+    if(prev<fC)break;
+    c=prev;
+  }
+  return c;
+}
+
+// diaCierreOCfg puede ser el día de cierre (uso legacy) o el cfg de la tarjeta;
+// pasarle el cfg permite anclar los cierres a las fechas reales del ciclo.
+function calcularCuotaActual(fechaCompra,diaCierreOCfg,fechaReferencia=null){
+  const cfg=(diaCierreOCfg&&typeof diaCierreOCfg==='object')?diaCierreOCfg:null;
+  const diaCierre=cfg?cfg.dia:diaCierreOCfg;
+  if(!diaCierre)return 0;
   const fC=new Date(fechaCompra+'T00:00:00');
   const ref=fechaReferencia?new Date(fechaReferencia):new Date();
   ref.setHours(0,0,0,0);
-  let pC=fC.getDate()>diaCierre
-    ? sumarMesCierre(fC.getFullYear(),fC.getMonth(),diaCierre)
-    : new Date(fC.getFullYear(),fC.getMonth(),clampDia(fC.getFullYear(),fC.getMonth(),diaCierre));
-  let ev=pC,n=0;
-  while(ev<ref){n++;ev=sumarMesCierre(ev.getFullYear(),ev.getMonth(),diaCierre);}
+  let ev=primerCierreDeCompra(fC,cfg,diaCierre),n=0,guarda=0;
+  const dia=ev.getDate();
+  while(ev<ref&&guarda++<600){n++;ev=sumarMesCierre(ev.getFullYear(),ev.getMonth(),dia);}
   return n+1;
 }
 
@@ -2104,7 +2141,7 @@ function openModalGasto(id=null){
     if(!infoEl){infoEl=document.createElement('div');infoEl.id='g-info-extra';infoEl.style.cssText='margin-bottom:14px;padding:10px 12px;background:var(--card);border-radius:10px;border:1px solid var(--border)';document.getElementById('modal-gasto').querySelector('.modal').insertBefore(infoEl,document.getElementById('modal-gasto').querySelector('.field'));}
     const t=getTarjeta(g.pago);const c=getCat(g.cat,'gasto');
     const fechaFmt=new Date(g.fecha+'T00:00:00').toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-    const cuotaInfo=g.cuotas?`<span style="margin-left:8px;font-size:11px;padding:2px 8px;border-radius:99px;background:var(--accent-dim);color:var(--accent);font-weight:700">C${calcularCuotaActual(g.fecha,cierres[g.pago]?.dia||31)}/${g.cuotas}</span>`:'';
+    const cuotaInfo=g.cuotas?`<span style="margin-left:8px;font-size:11px;padding:2px 8px;border-radius:99px;background:var(--accent-dim);color:var(--accent);font-weight:700">C${calcularCuotaActual(g.fecha,cierres[g.pago]||31)}/${g.cuotas}</span>`:'';
     infoEl.innerHTML=`<div style="font-size:12px;color:var(--muted);margin-bottom:4px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">Detalle</div>
       <div style="font-size:13px;margin-bottom:3px">${ic('calendar','icon-sm')} ${fechaFmt}</div>
       <div style="font-size:13px;margin-bottom:3px"><span style="color:${t.color}">${ic(t.icono)} ${t.nombre}</span> · ${ic(c.icono)} ${c.nombre} ${cuotaInfo}</div>
@@ -2726,7 +2763,7 @@ function getGastosMes(){
   const hoy=new Date();
   return gastos.filter(g=>{
     if(g.moneda==='USD')return false;
-    if(g.cuotas){const dc=cierres[g.pago]?.dia||31;const n=calcularCuotaActual(g.fecha,dc);return n>=1&&n<=g.cuotas;}
+    if(g.cuotas){const n=calcularCuotaActual(g.fecha,cierres[g.pago]||31);return n>=1&&n<=g.cuotas;}
     const d=new Date(g.fecha+'T00:00:00');return d.getMonth()===hoy.getMonth()&&d.getFullYear()===hoy.getFullYear();
   });
 }
@@ -2838,7 +2875,7 @@ function getGastosPeriodoActual(tId,gList){
   // Gastos normales
   gList.filter(g=>{
     if(g.pago!=tId)return false;
-    if(g.cuotas){const n=calcularCuotaActual(g.fecha,cfg.dia);return n>=1&&n<=g.cuotas;}
+    if(g.cuotas){const n=calcularCuotaActual(g.fecha,cfg);return n>=1&&n<=g.cuotas;}
     const fd=new Date(g.fecha+'T00:00:00');return fd>=desde&&fd<=hasta;
   }).forEach(g=>{
     if(g.moneda==='USD') usd+=g.monto;
@@ -2960,7 +2997,7 @@ function gastosPeriodoTarjeta(tId,cfg,desde,hasta){
     let incluir,cuotaInfo=null;
     if(g.cuotas){
       const fCompra=new Date(g.fecha+'T00:00:00');
-      const n=calcularCuotaActual(g.fecha,cfg.dia,hasta);
+      const n=calcularCuotaActual(g.fecha,cfg,hasta);
       incluir=fCompra<=hasta&&n>=1&&n<=g.cuotas;
       if(incluir)cuotaInfo={n,total:g.cuotas};
     }else{
@@ -3060,7 +3097,7 @@ function renderCuotas(){
   const cfgSel=tSel?cierres[tSel.id]:null;
 
   const activas=gastos.filter(g=>g.cuotas).map(g=>{
-    const dc=cierres[g.pago]?.dia||31;const n=calcularCuotaActual(g.fecha,dc);
+    const n=calcularCuotaActual(g.fecha,cierres[g.pago]||31);
     return{...g,numCuota:n,t:getTarjeta(g.pago)};
   }).filter(g=>g.numCuota<=g.cuotas);
 
