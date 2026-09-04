@@ -14,6 +14,18 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
 );
 
+// La función corre en UTC, así que un gasto cargado a las 23:49 de Argentina
+// caía en el día siguiente. Se fecha con el día local del usuario.
+const ZONA_HORARIA = 'America/Argentina/Buenos_Aires';
+function hoyLocal(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: ZONA_HORARIA,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+}
+
 function nuevoId(): number {
   return Date.now() * 1000 + Math.floor(Math.random() * 1000);
 }
@@ -209,7 +221,7 @@ Deno.serve(async (req) => {
     pago: String(pagoId),
     descripcion: extraido.descripcion,
     cat: catId,
-    fecha: new Date().toISOString().slice(0, 10),
+    fecha: hoyLocal(),
     moneda: extraido.moneda || 'ARS',
     es_fijo: false,
     es_reembolsable: false,
