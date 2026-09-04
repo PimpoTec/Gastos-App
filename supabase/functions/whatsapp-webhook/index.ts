@@ -19,7 +19,7 @@ function nuevoId(): number {
 }
 
 async function enviarWhatsapp(telefono: string, texto: string) {
-  await fetch(`https://graph.facebook.com/v21.0/${WHATSAPP_PHONE_NUMBER_ID}/messages`, {
+  const res = await fetch(`https://graph.facebook.com/v21.0/${WHATSAPP_PHONE_NUMBER_ID}/messages`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${WHATSAPP_TOKEN}`,
@@ -31,6 +31,9 @@ async function enviarWhatsapp(telefono: string, texto: string) {
       text: { body: texto },
     }),
   });
+  const detalle = await res.text();
+  if (!res.ok) console.error('[wa] error al responder', res.status, detalle);
+  else console.log('[wa] respuesta enviada a', telefono);
 }
 
 interface GastoExtraido {
@@ -70,9 +73,16 @@ Respondé ÚNICAMENTE un JSON con esta forma exacta:
       }),
     },
   );
+  if (!res.ok) {
+    console.error('[gemini] error', res.status, await res.text());
+    return null;
+  }
   const data = await res.json();
   const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-  if (!raw) return null;
+  if (!raw) {
+    console.error('[gemini] respuesta sin texto:', JSON.stringify(data).slice(0, 500));
+    return null;
+  }
   try {
     const parsed = JSON.parse(raw);
     if (parsed.error || typeof parsed.monto !== 'number') return null;
@@ -110,18 +120,31 @@ Deno.serve(async (req) => {
 
   const body = await req.json();
   const mensaje = body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
-  if (!mensaje || mensaje.type !== 'text') return new Response('ok', { status: 200 });
+  if (!mensaje) {
+    // Meta también manda webhooks de estado (entregado/leído): no son un gasto.
+    const tipoEvento = body?.entry?.[0]?.changes?.[0]?.field ?? 'desconocido';
+    console.log('[wa] webhook sin mensaje (campo:', tipoEvento, ')');
+    return new Response('ok', { status: 200 });
+  }
+  if (mensaje.type !== 'text') {
+    console.log('[wa] mensaje ignorado, tipo:', mensaje.type);
+    return new Response('ok', { status: 200 });
+  }
 
   const telefono: string = mensaje.from;
   const texto: string = mensaje.text.body;
+  console.log('[wa] mensaje de', telefono, '->', texto);
 
-  const { data: whUsuario } = await supabase
+  const { data: whUsuario, error: errUsuario } = await supabase
     .from('whatsapp_usuarios')
     .select('*')
     .eq('telefono', telefono)
     .maybeSingle();
 
+  if (errUsuario) console.error('[wa] error buscando usuario', errUsuario.message);
+
   if (!whUsuario) {
+    console.log('[wa] numero no vinculado:', telefono);
     await enviarWhatsapp(telefono, 'Tu número todavía no está vinculado a ninguna cuenta de Gastos-App.');
     return new Response('ok', { status: 200 });
   }
@@ -136,6 +159,8 @@ Deno.serve(async (req) => {
     (categorias ?? []).map((c) => c.nombre),
     (tarjetas ?? []).map((t) => t.nombre),
   );
+
+  console.log('[wa] interpretado:', JSON.stringify(extraido));
 
   if (!extraido) {
     await enviarWhatsapp(
@@ -159,7 +184,7 @@ Deno.serve(async (req) => {
   }
 
   const montoCuota = extraido.cuotas ? extraido.monto / extraido.cuotas : extraido.monto;
-  await supabase.from('gastos').insert({
+  const { error: errInsert } = await supabase.from('gastos').insert({
     id: nuevoId(),
     user_id: whUsuario.user_id,
     monto: montoCuota,
@@ -174,6 +199,13 @@ Deno.serve(async (req) => {
     es_reembolsable: false,
     cobrado: false,
   });
+
+  if (errInsert) {
+    console.error('[wa] error insertando gasto', errInsert.message);
+    await enviarWhatsapp(telefono, 'Entendí el gasto pero no lo pude guardar. Probá de nuevo en un rato.');
+    return new Response('ok', { status: 200 });
+  }
+  console.log('[wa] gasto cargado para', whUsuario.user_id);
 
   const cuotaTxt = extraido.cuotas ? ` en ${extraido.cuotas} cuotas` : '';
   await enviarWhatsapp(
