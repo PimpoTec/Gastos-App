@@ -1501,7 +1501,7 @@ function totalCicloTarjeta(tarjetaId,mesCierre){
   const desde=new Date(mesAnterior.getFullYear(),mesAnterior.getMonth(),Math.min(cfg.dia,diasMesAnterior)+1);
   const refCierre=hasta;
   const montoArs=g=>g.moneda==='USD'?(dolarBlue>0?g.monto*dolarBlue:0):g.monto;
-  return gastos.filter(g=>String(g.pago)===String(tarjetaId)).reduce((total,g)=>{
+  const totalGastos=gastos.filter(g=>String(g.pago)===String(tarjetaId)).reduce((total,g)=>{
     if(g.cuotas){
       const n=calcularCuotaActual(g.fecha,cfg.dia,refCierre);
       return(n>=1&&n<=g.cuotas)?total+montoArs(g):total;
@@ -1509,6 +1509,11 @@ function totalCicloTarjeta(tarjetaId,mesCierre){
     const fd=new Date(g.fecha+'T00:00:00');
     return(fd>=desde&&fd<=hasta)?total+montoArs(g):total;
   },0);
+  // Las suscripciones también se cobran en el resumen: se suman las que
+  // debitan dentro de este ciclo (pagadas o no, porque igual las vas a pagar).
+  const totalSubs=subs.filter(s=>String(s.pago)===String(tarjetaId)).reduce((total,s)=>
+    total+debitosSubEnPeriodo(s,desde,hasta).length*montoArs(s),0);
+  return totalGastos+totalSubs;
 }
 
 function renderProyeccion(){
@@ -1559,15 +1564,13 @@ function renderProyeccion(){
   // de ese período (no solo los que tienen cuotas). Se usa solo para el botón
   // "pago real".
   const mesCierrePago=new Date(refDate.getFullYear(),refDate.getMonth()-1,1);
-  const totalSubsPorTarjeta={};
-  subs.forEach(s=>{totalSubsPorTarjeta[s.pago]=(totalSubsPorTarjeta[s.pago]||0)+montoArs(s);});
 
   const breakdown=document.getElementById('proy-breakdown');
   if(breakdown){
     breakdown.innerHTML=tarjetas.length?tarjetas.map(t=>{
       const total=porMedio[t.id]||0;
       const tieneCierre=t.esTarjeta&&cierres[t.id]?.dia;
-      const totalPago=tieneCierre?totalCicloTarjeta(t.id,mesCierrePago)+(totalSubsPorTarjeta[t.id]||0):0;
+      const totalPago=tieneCierre?totalCicloTarjeta(t.id,mesCierrePago):0;
       const pagoReal=tieneCierre?Math.round(totalPago*(1+INTERES_TARJETA)):0;
       const descPago=`Pago tarjeta ${t.nombre}`;
       const yaAgregado=proyeccionItems.some(p=>p.tipo==='gasto'&&p.mes===mesKey&&p.desc===descPago);
@@ -1647,10 +1650,8 @@ async function agregarPagoTarjetaProyeccion(tarjetaId){
   const mesPago=targetDateProyeccion();
   const mesCierre=new Date(mesPago.getFullYear(),mesPago.getMonth()-1,1);
   const mesKey=mesKeyProyeccion();
-  const montoArs=g=>g.moneda==='USD'?(dolarBlue>0?g.monto*dolarBlue:0):g.monto;
-  const totalCiclo=totalCicloTarjeta(tarjetaId,mesCierre);
-  const totalSubs=subs.filter(s=>String(s.pago)===String(tarjetaId)).reduce((a,s)=>a+montoArs(s),0);
-  const pagoReal=Math.round((totalCiclo+totalSubs)*(1+INTERES_TARJETA));
+  // totalCicloTarjeta ya incluye las suscripciones que debitan en el ciclo.
+  const pagoReal=Math.round(totalCicloTarjeta(tarjetaId,mesCierre)*(1+INTERES_TARJETA));
   if(pagoReal<=0)return;
   const desc=`Pago tarjeta ${t.nombre}`;
   const existente=proyeccionItems.find(p=>p.tipo==='gasto'&&p.mes===mesKey&&p.desc===desc);
@@ -2811,6 +2812,25 @@ function updateHero(){
   }
 }
 
+// Todos los débitos de una suscripción que caen dentro de [desde,hasta], con
+// su estado de pago. Se enumeran mes por mes en vez de adivinar uno solo: un
+// ciclo real puede cruzar meses (ej. 27/8 → 1/10) y ahí el débito del medio
+// quedaba afuera, o incluso puede contener dos débitos de la misma sub.
+function debitosSubEnPeriodo(s,desde,hasta){
+  const out=[];
+  let anio=desde.getFullYear(),mes=desde.getMonth(),guarda=0;
+  while(guarda++<24){
+    const f=new Date(anio,mes,clampDia(anio,mes,s.dia));
+    if(f>hasta)break;
+    if(f>=desde){
+      const pagada=!!pagosSubs.find(p=>p.sub_id===s.id&&p.mes===f.getMonth()+1&&p.anio===f.getFullYear()&&p.pagado===true);
+      out.push({fecha:f,pagada});
+    }
+    const n=new Date(anio,mes+1,1);anio=n.getFullYear();mes=n.getMonth();
+  }
+  return out;
+}
+
 function getGastosPeriodoActual(tId,gList){
   const cfg=cierres[tId];if(!cfg?.dia)return{ars:0,usd:0,subsPendArs:0,subsPendUsd:0};
   const desde=inicioPeriodo(cfg),hasta=cierreDelPeriodo(cfg);
@@ -2828,20 +2848,15 @@ function getGastosPeriodoActual(tId,gList){
   // pagadas suman al total gastado; las que todavía no se pagaron quedan aparte,
   // en subsPend, hasta que se confirmen (ahí pasan a ars/usd).
   subs.filter(s=>String(s.pago)===String(tId)).forEach(s=>{
-    // Determinar en qué mes cae el débito de la sub dentro del período
-    let fSub=new Date(hasta.getFullYear(),hasta.getMonth(),s.dia);
-    if(s.dia>hasta.getDate()) fSub=new Date(desde.getFullYear(),desde.getMonth(),s.dia);
-    // Solo si el débito cae dentro del período
-    if(fSub<desde||fSub>hasta) return;
-    const subMes=fSub.getMonth()+1, subAnio=fSub.getFullYear();
-    const pagada=pagosSubs.find(p=>p.sub_id===s.id&&p.mes===subMes&&p.anio===subAnio&&p.pagado===true);
-    if(pagada){
-      if(s.moneda==='USD') usd+=s.monto;
-      else ars+=s.monto;
-    }else{
-      if(s.moneda==='USD') subsPendUsd+=s.monto;
-      else subsPendArs+=s.monto;
-    }
+    debitosSubEnPeriodo(s,desde,hasta).forEach(({pagada})=>{
+      if(pagada){
+        if(s.moneda==='USD') usd+=s.monto;
+        else ars+=s.monto;
+      }else{
+        if(s.moneda==='USD') subsPendUsd+=s.monto;
+        else subsPendArs+=s.monto;
+      }
+    });
   });
   return{ars,usd,subsPendArs,subsPendUsd};
 }
@@ -2957,14 +2972,11 @@ function gastosPeriodoTarjeta(tId,cfg,desde,hasta){
     if(g.moneda==='USD')usd+=g.monto;else ars+=g.monto;
   });
   subs.filter(s=>String(s.pago)===String(tId)).forEach(s=>{
-    let fSub=new Date(hasta.getFullYear(),hasta.getMonth(),s.dia);
-    if(s.dia>hasta.getDate())fSub=new Date(desde.getFullYear(),desde.getMonth(),s.dia);
-    if(fSub<desde||fSub>hasta)return;
-    const subMes=fSub.getMonth()+1,subAnio=fSub.getFullYear();
-    const pagada=pagosSubs.find(p=>p.sub_id===s.id&&p.mes===subMes&&p.anio===subAnio&&p.pagado===true);
-    if(!pagada)return;
-    items.push({tipo:'sub',id:s.id,desc:s.nombre,cat:s.cat,fecha:fSub.toISOString().split('T')[0],monto:s.monto,moneda:s.moneda,cuotaInfo:null});
-    if(s.moneda==='USD')usd+=s.monto;else ars+=s.monto;
+    debitosSubEnPeriodo(s,desde,hasta).forEach(({fecha,pagada})=>{
+      if(!pagada)return;
+      items.push({tipo:'sub',id:s.id,desc:s.nombre,cat:s.cat,fecha:aISO(fecha),monto:s.monto,moneda:s.moneda,cuotaInfo:null});
+      if(s.moneda==='USD')usd+=s.monto;else ars+=s.monto;
+    });
   });
   items.sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
   return{items,ars,usd};
