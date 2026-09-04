@@ -18,22 +18,38 @@ function nuevoId(): number {
   return Date.now() * 1000 + Math.floor(Math.random() * 1000);
 }
 
+// Los celulares argentinos llevan un 9 después del código de país en WhatsApp
+// (549 11 xxxx xxxx), pero Meta los registra sin ese 9 (54 11 xxxx xxxx). El
+// webhook informa una forma y la lista de destinatarios permitidos puede tener
+// la otra, así que se prueban ambas.
+function variantesTelefono(telefono: string): string[] {
+  const t = telefono.replace(/\D/g, '');
+  const vars = [t];
+  if (t.startsWith('549')) vars.push('54' + t.slice(3));
+  else if (t.startsWith('54')) vars.push('549' + t.slice(2));
+  return vars;
+}
+
 async function enviarWhatsapp(telefono: string, texto: string) {
-  const res = await fetch(`https://graph.facebook.com/v21.0/${WHATSAPP_PHONE_NUMBER_ID}/messages`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${WHATSAPP_TOKEN}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      messaging_product: 'whatsapp',
-      to: telefono,
-      text: { body: texto },
-    }),
-  });
-  const detalle = await res.text();
-  if (!res.ok) console.error('[wa] error al responder', res.status, detalle);
-  else console.log('[wa] respuesta enviada a', telefono);
+  for (const destino of variantesTelefono(telefono)) {
+    const res = await fetch(`https://graph.facebook.com/v21.0/${WHATSAPP_PHONE_NUMBER_ID}/messages`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${WHATSAPP_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        to: destino,
+        text: { body: texto },
+      }),
+    });
+    if (res.ok) {
+      console.log('[wa] respuesta enviada a', destino);
+      return;
+    }
+    console.error('[wa] no pude responder a', destino, res.status, await res.text());
+  }
 }
 
 interface GastoExtraido {
@@ -135,11 +151,11 @@ Deno.serve(async (req) => {
   const texto: string = mensaje.text.body;
   console.log('[wa] mensaje de', telefono, '->', texto);
 
-  const { data: whUsuario, error: errUsuario } = await supabase
+  const { data: usuarios, error: errUsuario } = await supabase
     .from('whatsapp_usuarios')
     .select('*')
-    .eq('telefono', telefono)
-    .maybeSingle();
+    .in('telefono', variantesTelefono(telefono));
+  const whUsuario = usuarios?.[0] ?? null;
 
   if (errUsuario) console.error('[wa] error buscando usuario', errUsuario.message);
 
