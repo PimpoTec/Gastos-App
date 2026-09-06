@@ -120,6 +120,56 @@ Respondé ÚNICAMENTE un JSON con esta forma exacta:
   }
 }
 
+function fmtLista(tarjetas: { nombre: string }[]): string {
+  return tarjetas.map((t, i) => `${i + 1}. ${t.nombre}`).join('\n');
+}
+
+function textoPreguntaMedio(g: GastoExtraido, tarjetas: { nombre: string }[]): string {
+  const cuotaTxt = g.cuotas ? ` en ${g.cuotas} cuotas` : '';
+  return `Anoté ${fmt(g.monto)} - ${g.descripcion}${cuotaTxt}.\n\n¿Con qué lo pagaste?\n${fmtLista(tarjetas)}\n\nRespondé con el número o el nombre.`;
+}
+
+function textoConfirmacion(g: GastoExtraido, medio: string): string {
+  const cuotaTxt = g.cuotas ? ` en ${g.cuotas} cuotas` : '';
+  return `✅ Cargado: ${fmt(g.monto)} - ${g.descripcion} (${medio})${cuotaTxt}`;
+}
+
+// Interpreta la respuesta a "¿con qué lo pagaste?": acepta el número de la
+// lista o el nombre (aunque esté escrito parcial).
+function resolverMedioElegido<T extends { id: number; nombre: string }>(
+  texto: string,
+  tarjetas: T[],
+): T | null {
+  const limpio = texto.trim();
+  const n = parseInt(limpio, 10);
+  if (!isNaN(n) && String(n) === limpio && n >= 1 && n <= tarjetas.length) return tarjetas[n - 1];
+  return encontrarPorNombre(tarjetas, limpio);
+}
+
+async function guardarGasto(
+  userId: string,
+  g: GastoExtraido,
+  pagoId: number,
+  catId: number,
+) {
+  const montoCuota = g.cuotas ? g.monto / g.cuotas : g.monto;
+  return await supabase.from('gastos').insert({
+    id: nuevoId(),
+    user_id: userId,
+    monto: montoCuota,
+    monto_original: g.cuotas ? g.monto : null,
+    cuotas: g.cuotas,
+    pago: String(pagoId),
+    descripcion: g.descripcion,
+    cat: catId,
+    fecha: hoyLocal(),
+    moneda: g.moneda || 'ARS',
+    es_fijo: false,
+    es_reembolsable: false,
+    cobrado: false,
+  });
+}
+
 function encontrarPorNombre<T extends { id: number; nombre: string }>(
   lista: T[],
   nombre: string | null,
@@ -182,6 +232,35 @@ Deno.serve(async (req) => {
     supabase.from('categorias').select('id,nombre').eq('user_id', whUsuario.user_id).eq('tipo', 'gasto'),
   ]);
 
+  // Si quedó un gasto esperando medio de pago, este mensaje puede ser la
+  // respuesta a esa pregunta.
+  const { data: pendientes } = await supabase
+    .from('whatsapp_pendientes')
+    .select('*')
+    .in('telefono', variantesTelefono(telefono));
+  const pendiente = pendientes?.[0] ?? null;
+
+  if (pendiente) {
+    const elegida = resolverMedioElegido(texto, tarjetas ?? []);
+    if (elegida) {
+      const g = pendiente.gasto as GastoExtraido & { catId: number };
+      const { error } = await guardarGasto(pendiente.user_id, g, elegida.id, g.catId);
+      await supabase.from('whatsapp_pendientes').delete().eq('telefono', pendiente.telefono);
+      if (error) {
+        console.error('[wa] error guardando gasto pendiente', error.message);
+        await enviarWhatsapp(telefono, 'Entendí el medio de pago pero no pude guardar el gasto. Probá de nuevo.');
+        return new Response('ok', { status: 200 });
+      }
+      console.log('[wa] gasto pendiente cargado con', elegida.nombre);
+      await enviarWhatsapp(telefono, textoConfirmacion(g, elegida.nombre));
+      return new Response('ok', { status: 200 });
+    }
+    // No se entendió como medio de pago: puede ser un gasto nuevo. Se descarta
+    // el pendiente para no dejarlo trabado y se sigue el flujo normal.
+    console.log('[wa] respuesta no coincide con ningún medio, se descarta el pendiente');
+    await supabase.from('whatsapp_pendientes').delete().eq('telefono', pendiente.telefono);
+  }
+
   const extraido = await interpretarMensaje(
     texto,
     (categorias ?? []).map((c) => c.nombre),
@@ -200,33 +279,35 @@ Deno.serve(async (req) => {
 
   const tarjeta = encontrarPorNombre(tarjetas ?? [], extraido.medio_pago);
   const categoria = encontrarPorNombre(categorias ?? [], extraido.categoria);
-  const pagoId = tarjeta?.id ?? whUsuario.tarjeta_default;
   const catId = categoria?.id ?? whUsuario.cat_default;
 
-  if (!pagoId || !catId) {
+  if (!catId) {
     await enviarWhatsapp(
       telefono,
-      `Entendí "${extraido.descripcion}" por ${fmt(extraido.monto)}, pero me falta saber ${!pagoId ? 'el medio de pago' : ''}${!pagoId && !catId ? ' y ' : ''}${!catId ? 'la categoría' : ''}. Decímelo y lo cargo.`,
+      `Entendí "${extraido.descripcion}" por ${fmt(extraido.monto)}, pero no tenés ninguna categoría de gasto creada en la app. Creá una y volvé a intentar.`,
     );
     return new Response('ok', { status: 200 });
   }
 
-  const montoCuota = extraido.cuotas ? extraido.monto / extraido.cuotas : extraido.monto;
-  const { error: errInsert } = await supabase.from('gastos').insert({
-    id: nuevoId(),
-    user_id: whUsuario.user_id,
-    monto: montoCuota,
-    monto_original: extraido.cuotas ? extraido.monto : null,
-    cuotas: extraido.cuotas,
-    pago: String(pagoId),
-    descripcion: extraido.descripcion,
-    cat: catId,
-    fecha: hoyLocal(),
-    moneda: extraido.moneda || 'ARS',
-    es_fijo: false,
-    es_reembolsable: false,
-    cobrado: false,
-  });
+  // Si no aclaró con qué pagó, no se asume: se pregunta con las opciones reales
+  // y el gasto queda pendiente hasta que conteste.
+  if (!tarjeta) {
+    if (!(tarjetas ?? []).length) {
+      await enviarWhatsapp(telefono, 'No tenés medios de pago cargados en la app. Agregá uno y volvé a intentar.');
+      return new Response('ok', { status: 200 });
+    }
+    await supabase.from('whatsapp_pendientes').upsert({
+      telefono,
+      user_id: whUsuario.user_id,
+      gasto: { ...extraido, catId },
+      created_at: new Date().toISOString(),
+    });
+    console.log('[wa] falta medio de pago, gasto pendiente para', telefono);
+    await enviarWhatsapp(telefono, textoPreguntaMedio(extraido, tarjetas ?? []));
+    return new Response('ok', { status: 200 });
+  }
+
+  const { error: errInsert } = await guardarGasto(whUsuario.user_id, extraido, tarjeta.id, catId);
 
   if (errInsert) {
     console.error('[wa] error insertando gasto', errInsert.message);
@@ -235,11 +316,7 @@ Deno.serve(async (req) => {
   }
   console.log('[wa] gasto cargado para', whUsuario.user_id);
 
-  const cuotaTxt = extraido.cuotas ? ` en ${extraido.cuotas} cuotas` : '';
-  await enviarWhatsapp(
-    telefono,
-    `✅ Cargado: ${fmt(extraido.monto)} - ${extraido.descripcion} (${tarjeta?.nombre ?? 'medio por defecto'})${cuotaTxt}`,
-  );
+  await enviarWhatsapp(telefono, textoConfirmacion(extraido, tarjeta.nombre));
   return new Response('ok', { status: 200 });
 });
 
