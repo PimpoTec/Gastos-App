@@ -79,3 +79,39 @@ test('no se puede guardar un gasto sin categoría', async ({ page }) => {
   const gastosGuardados = await page.evaluate(() => gastos.length);
   expect(gastosGuardados).toBe(0);
 });
+
+test('los gastos sin categoría del bot aparecen para reasignar', async ({ page }) => {
+  await page.evaluate(() => {
+    cats.push({ id: 9101, nombre: 'Bot', icono: 'box', color: '#748ffc', tipo: 'gasto' });
+    cats.push({ id: 9102, nombre: 'Comida', icono: 'box', color: '#748ffc', tipo: 'gasto' });
+    tarjetas.push({ id: 9103, nombre: 'Efectivo', icono: 'cash', color: '#63e6be', esTarjeta: false });
+    gastos.push({
+      id: 9104, monto: 500, montoOriginal: null, cuotas: null, pago: '9103',
+      desc: 'coto', cat: 9101, fecha: '2026-09-06', moneda: 'ARS', esFijo: false,
+      esReembolsable: false, cobrado: false,
+    });
+    renderSinCategoria();
+  });
+
+  const banner = page.locator('#sin-categoria-banner');
+  await expect(banner).toBeVisible();
+  await expect(banner).toContainText('1 gasto sin categoría');
+
+  // Colapsada por defecto; al tocarla se despliega y muestra el gasto.
+  await expect(page.locator('#sin-categoria-list')).toHaveClass(/collapsible-hidden/);
+  await banner.click();
+  await expect(page.locator('#sin-categoria-list')).not.toHaveClass(/collapsible-hidden/);
+  await expect(page.locator('#sin-categoria-list')).toContainText('coto');
+
+  // Un gasto con categoría normal no debe aparecer acá.
+  await page.evaluate(() => {
+    gastos.push({
+      id: 9105, monto: 800, montoOriginal: null, cuotas: null, pago: '9103',
+      desc: 'almuerzo', cat: 9102, fecha: '2026-09-06', moneda: 'ARS', esFijo: false,
+      esReembolsable: false, cobrado: false,
+    });
+    renderSinCategoria();
+  });
+  await expect(page.locator('#sin-categoria-banner')).toContainText('1 gasto sin categoría');
+  await expect(page.locator('#sin-categoria-list')).not.toContainText('almuerzo');
+});

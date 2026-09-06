@@ -571,6 +571,10 @@
         <div id="pendientes-cobro-banner" class="ingreso-item" style="align-items:center;margin-bottom:0" onclick="togglePendientesCobro()"></div>
         <div id="pendientes-cobro-list" class="collapsible-hidden" style="margin-top:8px"></div>
       </div>
+      <div id="sin-categoria-wrap" style="display:none;margin-bottom:20px">
+        <div id="sin-categoria-banner" class="ingreso-item" style="align-items:center;margin-bottom:0" onclick="toggleSinCategoria()"></div>
+        <div id="sin-categoria-list" class="collapsible-hidden" style="margin-top:8px"></div>
+      </div>
       <div class="section-title" id="tarjetas-title" style="margin-top:4px">Tarjetas <button class="btn-cfg" onclick="openCierres()"><svg class="icon icon-sm"><use href="#i-gear"></use></svg> Cierres y límites</button></div>
       <div class="pago-breakdown" id="pago-breakdown"></div>
       <div class="section-title">Próximos vencimientos</div>
@@ -2707,7 +2711,7 @@ async function saveCierres(){
 
 // ── Render ───────────────────────────────────────────
 function renderAll(){
-  updateHero();renderDashboard();renderFeed();renderPendientesCobro();
+  updateHero();renderDashboard();renderFeed();renderPendientesCobro();renderSinCategoria();
   if(tabActual==='cuotas') renderCuotasTabs(); else renderCuotas();
   renderSubs();
   const b=document.getElementById('buscador-gastos');if(b)b.style.display='block';
@@ -2715,6 +2719,42 @@ function renderAll(){
 
 let pendientesCobroExpanded=false;
 function togglePendientesCobro(){pendientesCobroExpanded=!pendientesCobroExpanded;renderPendientesCobro();}
+
+// Gastos que cargó el bot de WhatsApp sin poder deducir la categoría: quedan
+// en la categoría "Bot" para reasignarlos a mano desde acá.
+let sinCategoriaExpanded=false;
+function toggleSinCategoria(){sinCategoriaExpanded=!sinCategoriaExpanded;renderSinCategoria();}
+
+function renderSinCategoria(){
+  const wrap=document.getElementById('sin-categoria-wrap');
+  const banner=document.getElementById('sin-categoria-banner');
+  const lista=document.getElementById('sin-categoria-list');
+  if(!wrap||!banner||!lista)return;
+  const catBot=cats.find(c=>c.tipo==='gasto'&&c.nombre.toLowerCase()==='bot');
+  const pendientes=catBot
+    ? gastos.filter(g=>String(g.cat)===String(catBot.id)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha))
+    : [];
+  if(!pendientes.length){wrap.style.display='none';return;}
+  wrap.style.display='block';
+  banner.innerHTML=`
+    <div class="ico">${ic('box')}</div>
+    <div class="info"><div class="desc" style="color:var(--warning)">${pendientes.length} gasto${pendientes.length===1?'':'s'} sin categoría</div><div class="meta">Cargados por WhatsApp · tocá para asignarles una</div></div>
+    <svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke:var(--muted);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;transition:transform .2s;transform:rotate(${sinCategoriaExpanded?'180':'0'}deg)"><path d="M6 9l6 6 6-6"/></svg>
+  `;
+  lista.classList.toggle('collapsible-hidden',!sinCategoriaExpanded);
+  lista.innerHTML=pendientes.map(g=>{
+    const fl=new Date(g.fecha+'T00:00:00').toLocaleDateString('es-AR',{day:'numeric',month:'short'});
+    const t=getTarjeta(g.pago);
+    return`<div class="ingreso-item" style="align-items:center;cursor:pointer" onclick="openModalGasto(${g.id})">
+      <div class="ico">${ic('box')}</div>
+      <div class="info"><div class="desc">${g.desc}</div><div class="meta">${fl} · <span style="color:${t.color}">${t.nombre}</span></div></div>
+      <div style="text-align:right;flex-shrink:0">
+        <div class="amount" style="margin-bottom:6px">${fmt(g.monto,g.moneda)}</div>
+        <div style="font-size:11px;font-weight:700;color:var(--accent)">Asignar categoría →</div>
+      </div>
+    </div>`;
+  }).join('');
+}
 
 function renderPendientesCobro(){
   const wrap=document.getElementById('pendientes-cobro-wrap');

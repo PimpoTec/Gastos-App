@@ -146,6 +146,32 @@ function resolverMedioElegido<T extends { id: number; nombre: string }>(
   return encontrarPorNombre(tarjetas, limpio);
 }
 
+// Categoría comodín para los gastos que el bot no pudo clasificar. Se crea la
+// primera vez y después se reutiliza; desde la app se pueden reasignar.
+const NOMBRE_CAT_BOT = 'Bot';
+async function idCategoriaBot(
+  userId: string,
+  categorias: { id: number; nombre: string }[],
+): Promise<number | null> {
+  const existente = categorias.find((c) => c.nombre.toLowerCase() === NOMBRE_CAT_BOT.toLowerCase());
+  if (existente) return existente.id;
+  const id = nuevoId();
+  const { error } = await supabase.from('categorias').insert({
+    id,
+    user_id: userId,
+    nombre: NOMBRE_CAT_BOT,
+    icono: 'box',
+    color: '#748ffc',
+    tipo: 'gasto',
+  });
+  if (error) {
+    console.error('[wa] no pude crear la categoría Bot', error.message);
+    return null;
+  }
+  console.log('[wa] categoría Bot creada para', userId);
+  return id;
+}
+
 async function guardarGasto(
   userId: string,
   g: GastoExtraido,
@@ -279,13 +305,11 @@ Deno.serve(async (req) => {
 
   const tarjeta = encontrarPorNombre(tarjetas ?? [], extraido.medio_pago);
   const categoria = encontrarPorNombre(categorias ?? [], extraido.categoria);
-  const catId = categoria?.id ?? whUsuario.cat_default;
-
+  // Si no se pudo deducir la categoría, va a una categoría "Bot" para revisar
+  // después desde la app, en vez de adivinar una que probablemente esté mal.
+  const catId = categoria?.id ?? await idCategoriaBot(whUsuario.user_id, categorias ?? []);
   if (!catId) {
-    await enviarWhatsapp(
-      telefono,
-      `Entendí "${extraido.descripcion}" por ${fmt(extraido.monto)}, pero no tenés ninguna categoría de gasto creada en la app. Creá una y volvé a intentar.`,
-    );
+    await enviarWhatsapp(telefono, 'No pude guardar el gasto: falló al preparar la categoría. Probá de nuevo en un rato.');
     return new Response('ok', { status: 200 });
   }
 
