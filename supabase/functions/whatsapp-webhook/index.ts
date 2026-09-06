@@ -73,12 +73,47 @@ interface GastoExtraido {
   cuotas: number | null;
 }
 
+// Descarga un audio de WhatsApp. Son dos pasos: primero se pide la URL del
+// media por su id, después se baja el archivo (ambos con el token de Meta).
+async function bajarAudio(mediaId: string): Promise<{ mimeType: string; base64: string } | null> {
+  const metaRes = await fetch(`https://graph.facebook.com/v21.0/${mediaId}`, {
+    headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` },
+  });
+  if (!metaRes.ok) {
+    console.error('[wa] no pude pedir la URL del audio', metaRes.status, await metaRes.text());
+    return null;
+  }
+  const { url, mime_type } = await metaRes.json();
+  const archivoRes = await fetch(url, { headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` } });
+  if (!archivoRes.ok) {
+    console.error('[wa] no pude bajar el audio', archivoRes.status);
+    return null;
+  }
+  const bytes = new Uint8Array(await archivoRes.arrayBuffer());
+  // Gemini acepta hasta ~20MB por request contando el base64 (que infla ~33%).
+  const MAX_BYTES = 14 * 1024 * 1024;
+  if (bytes.length > MAX_BYTES) {
+    console.error('[wa] audio demasiado largo:', bytes.length, 'bytes');
+    return null;
+  }
+  let binario = '';
+  for (let i = 0; i < bytes.length; i += 8192) {
+    binario += String.fromCharCode(...bytes.subarray(i, i + 8192));
+  }
+  console.log('[wa] audio bajado:', mime_type, bytes.length, 'bytes');
+  return { mimeType: (mime_type || 'audio/ogg').split(';')[0], base64: btoa(binario) };
+}
+
 async function interpretarMensaje(
-  texto: string,
+  entrada: string | { mimeType: string; base64: string },
   categorias: string[],
   tarjetas: string[],
 ): Promise<GastoExtraido | null> {
-  const prompt = `Interpretá este mensaje como un gasto de la app Gastos-App: "${texto}"
+  const esAudio = typeof entrada !== 'string';
+  const encabezado = esAudio
+    ? 'Escuchá este audio e interpretalo como un gasto de la app Gastos-App.'
+    : `Interpretá este mensaje como un gasto de la app Gastos-App: "${entrada}"`;
+  const prompt = `${encabezado}
 
 Categorías disponibles del usuario: ${categorias.join(', ') || '(ninguna)'}
 Medios de pago disponibles del usuario: ${tarjetas.join(', ') || '(ninguno)'}
@@ -88,7 +123,7 @@ Respondé ÚNICAMENTE un JSON con esta forma exacta:
 
 - "categoria" y "medio_pago" tienen que ser EXACTAMENTE uno de los nombres de las listas de arriba (el que más se parezca), o null si no se menciona o no hay ninguno parecido.
 - "cuotas" es el número total de cuotas si lo menciona (ej: "en 3 cuotas" -> 3), si no null.
-- Si el mensaje no describe un gasto con un monto claro, respondé exactamente: {"error": "no_parseable"}`;
+- Si no se describe un gasto con un monto claro, respondé exactamente: {"error": "no_parseable"}`;
 
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
@@ -96,7 +131,11 @@ Respondé ÚNICAMENTE un JSON con esta forma exacta:
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
+        contents: [{
+          parts: esAudio
+            ? [{ text: prompt }, { inlineData: { mimeType: entrada.mimeType, data: entrada.base64 } }]
+            : [{ text: prompt }],
+        }],
         generationConfig: { responseMimeType: 'application/json' },
       }),
     },
@@ -230,14 +269,16 @@ Deno.serve(async (req) => {
     console.log('[wa] webhook sin mensaje (campo:', tipoEvento, ')');
     return new Response('ok', { status: 200 });
   }
-  if (mensaje.type !== 'text') {
+  const telefono: string = mensaje.from;
+  if (mensaje.type !== 'text' && mensaje.type !== 'audio') {
     console.log('[wa] mensaje ignorado, tipo:', mensaje.type);
+    await enviarWhatsapp(telefono, 'Por ahora entiendo mensajes de texto y audios. Probá contándome el gasto por alguna de esas dos vías.');
     return new Response('ok', { status: 200 });
   }
 
-  const telefono: string = mensaje.from;
-  const texto: string = mensaje.text.body;
-  console.log('[wa] mensaje de', telefono, '->', texto);
+  const esAudio = mensaje.type === 'audio';
+  const texto: string = esAudio ? '' : mensaje.text.body;
+  console.log('[wa] mensaje de', telefono, esAudio ? '-> (audio)' : '-> ' + texto);
 
   const { data: usuarios, error: errUsuario } = await supabase
     .from('whatsapp_usuarios')
@@ -266,7 +307,7 @@ Deno.serve(async (req) => {
     .in('telefono', variantesTelefono(telefono));
   const pendiente = pendientes?.[0] ?? null;
 
-  if (pendiente) {
+  if (pendiente && !esAudio) {
     const elegida = resolverMedioElegido(texto, tarjetas ?? []);
     if (elegida) {
       const g = pendiente.gasto as GastoExtraido & { catId: number };
@@ -287,8 +328,18 @@ Deno.serve(async (req) => {
     await supabase.from('whatsapp_pendientes').delete().eq('telefono', pendiente.telefono);
   }
 
+  let entrada: string | { mimeType: string; base64: string } = texto;
+  if (esAudio) {
+    const audio = await bajarAudio(mensaje.audio.id);
+    if (!audio) {
+      await enviarWhatsapp(telefono, 'No pude descargar el audio. Probá de nuevo, o contámelo por texto.');
+      return new Response('ok', { status: 200 });
+    }
+    entrada = audio;
+  }
+
   const extraido = await interpretarMensaje(
-    texto,
+    entrada,
     (categorias ?? []).map((c) => c.nombre),
     (tarjetas ?? []).map((t) => t.nombre),
   );
@@ -298,7 +349,9 @@ Deno.serve(async (req) => {
   if (!extraido) {
     await enviarWhatsapp(
       telefono,
-      'No entendí ese gasto. Probá algo como: "gasté 500 en el kiosco con débito".',
+      esAudio
+        ? 'No pude entender el gasto en ese audio. Probá hablando más claro el monto y en qué fue, o mandámelo por texto.'
+        : 'No entendí ese gasto. Probá algo como: "gasté 500 en el kiosco con débito".',
     );
     return new Response('ok', { status: 200 });
   }
