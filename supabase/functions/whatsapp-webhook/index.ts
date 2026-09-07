@@ -2,6 +2,7 @@
 // Gemini (nivel gratuito), y carga el gasto correspondiente en la cuenta del
 // usuario que escribió (identificado por su número en whatsapp_usuarios).
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { cicloActual, calcularCuotaActual, aISO, sumarMesesFecha } from './ciclos.js';
 
 const WHATSAPP_TOKEN = Deno.env.get('WHATSAPP_TOKEN')!;
 const WHATSAPP_PHONE_NUMBER_ID = Deno.env.get('WHATSAPP_PHONE_NUMBER_ID')!;
@@ -73,6 +74,13 @@ interface GastoExtraido {
   cuotas: number | null;
 }
 
+type Intencion =
+  | { tipo: 'gasto'; gasto: GastoExtraido }
+  | { tipo: 'ingreso'; monto: number; descripcion: string; moneda: 'ARS' | 'USD'; categoria: string }
+  | { tipo: 'saldo' }
+  | { tipo: 'tarjeta'; tarjeta: string | null }
+  | { tipo: 'desconocido' };
+
 // Descarga un audio de WhatsApp. Son dos pasos: primero se pide la URL del
 // media por su id, después se baja el archivo (ambos con el token de Meta).
 async function bajarAudio(mediaId: string): Promise<{ mimeType: string; base64: string } | null> {
@@ -108,22 +116,39 @@ async function interpretarMensaje(
   entrada: string | { mimeType: string; base64: string },
   categorias: string[],
   tarjetas: string[],
-): Promise<GastoExtraido | null> {
+): Promise<Intencion | null> {
   const esAudio = typeof entrada !== 'string';
   const encabezado = esAudio
-    ? 'Escuchá este audio e interpretalo como un gasto de la app Gastos-App.'
-    : `Interpretá este mensaje como un gasto de la app Gastos-App: "${entrada}"`;
+    ? 'Escuchá este audio de un usuario de la app de finanzas personales Gastos-App.'
+    : `Interpretá este mensaje de un usuario de la app de finanzas personales Gastos-App: "${entrada}"`;
   const prompt = `${encabezado}
 
-Categorías disponibles del usuario: ${categorias.join(', ') || '(ninguna)'}
-Medios de pago disponibles del usuario: ${tarjetas.join(', ') || '(ninguno)'}
+Categorías de gasto del usuario: ${categorias.join(', ') || '(ninguna)'}
+Medios de pago del usuario: ${tarjetas.join(', ') || '(ninguno)'}
 
-Respondé ÚNICAMENTE un JSON con esta forma exacta:
-{"monto": number, "descripcion": string, "categoria": string|null, "medio_pago": string|null, "moneda": "ARS"|"USD", "cuotas": number|null}
+Determiná qué quiere hacer y respondé ÚNICAMENTE un JSON con una de estas formas:
 
-- "categoria" y "medio_pago" tienen que ser EXACTAMENTE uno de los nombres de las listas de arriba (el que más se parezca), o null si no se menciona o no hay ninguno parecido.
-- "cuotas" es el número total de cuotas si lo menciona (ej: "en 3 cuotas" -> 3), si no null.
-- Si no se describe un gasto con un monto claro, respondé exactamente: {"error": "no_parseable"}`;
+1) Registrar un gasto:
+{"tipo":"gasto","monto":number,"descripcion":string,"categoria":string|null,"medio_pago":string|null,"moneda":"ARS"|"USD","cuotas":number|null}
+
+2) Registrar un ingreso (cobró plata: sueldo, venta, transferencia recibida):
+{"tipo":"ingreso","monto":number,"descripcion":string,"moneda":"ARS"|"USD","categoria":"sueldo"|"he50"|"he100"|"premio"|"extra"|"reembolso"|"otro"}
+
+3) Preguntar cuánta plata le queda / su balance del mes:
+{"tipo":"saldo"}
+
+4) Preguntar cuánto tiene gastado o cuánto debe pagar de una tarjeta:
+{"tipo":"tarjeta","tarjeta":string|null}
+
+5) Cualquier otra cosa:
+{"tipo":"desconocido"}
+
+Reglas:
+- "categoria" y "medio_pago" tienen que ser EXACTAMENTE uno de los nombres de las listas de arriba (el que más se parezca), o null si no se menciona o ninguno se parece.
+- En "tarjeta", igual: el nombre exacto de la lista de medios de pago, o null si pregunta en general sin nombrar una.
+- "cuotas" es el total de cuotas si lo menciona (ej: "en 3 cuotas" -> 3), si no null.
+- En un ingreso, "categoria" es una de esas siete: sueldo, he50 (horas extra al 50%), he100 (horas extra al 100%), premio, extra (ingreso extra, ventas), reembolso, otro.
+- Un gasto necesita un monto claro. Si dice que gastó pero no se entiende cuánto, usá {"tipo":"desconocido"}.`
 
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
@@ -151,9 +176,21 @@ Respondé ÚNICAMENTE un JSON con esta forma exacta:
     return null;
   }
   try {
-    const parsed = JSON.parse(raw);
-    if (parsed.error || typeof parsed.monto !== 'number') return null;
-    return parsed as GastoExtraido;
+    const p = JSON.parse(raw);
+    if (p.tipo === 'gasto' && typeof p.monto === 'number') return { tipo: 'gasto', gasto: p as GastoExtraido };
+    if (p.tipo === 'ingreso' && typeof p.monto === 'number') {
+      const CATS_INGRESO = ['sueldo', 'he50', 'he100', 'premio', 'extra', 'reembolso', 'otro'];
+      return {
+        tipo: 'ingreso',
+        monto: p.monto,
+        descripcion: p.descripcion || 'Ingreso',
+        moneda: p.moneda || 'ARS',
+        categoria: CATS_INGRESO.includes(p.categoria) ? p.categoria : 'otro',
+      };
+    }
+    if (p.tipo === 'saldo') return { tipo: 'saldo' };
+    if (p.tipo === 'tarjeta') return { tipo: 'tarjeta', tarjeta: p.tarjeta ?? null };
+    return { tipo: 'desconocido' };
   } catch {
     return null;
   }
@@ -209,6 +246,100 @@ async function idCategoriaBot(
   }
   console.log('[wa] categoría Bot creada para', userId);
   return id;
+}
+
+// Config de ciclo de una tarjeta. En config.cierres las claves son el id de la
+// tarjeta como texto (viene de un objeto JS, donde las claves siempre son
+// strings).
+function cierresDe(config: { cierres?: Record<string, unknown> } | null, tarjetaId: number) {
+  const cfg = config?.cierres?.[String(tarjetaId)] as Record<string, unknown> | undefined;
+  return cfg?.dia ? cfg : null;
+}
+
+// ── Consultas ────────────────────────────────────────
+// "Cuánta plata me queda": mismo criterio que la pestaña Balance de la app —
+// ingresos del mes menos lo que salió del bolsillo (sin tarjeta de crédito) y
+// las suscripciones ya pagadas que tampoco van con crédito.
+async function calcularSaldoDelMes(userId: string) {
+  const hoy = new Date(hoyLocal() + 'T12:00:00');
+  const mes = hoy.getMonth(), anio = hoy.getFullYear();
+  const desde = `${anio}-${String(mes + 1).padStart(2, '0')}-01`;
+  const hasta = aISO(new Date(anio, mes + 1, 0));
+
+  const [{ data: ingresos }, { data: gastosMes }, { data: tarjetas }, { data: subs }, { data: pagos }] =
+    await Promise.all([
+      supabase.from('ingresos').select('monto,moneda').eq('user_id', userId).gte('fecha', desde).lte('fecha', hasta),
+      supabase.from('gastos').select('monto,moneda,pago').eq('user_id', userId).gte('fecha', desde).lte('fecha', hasta),
+      supabase.from('tarjetas').select('id,nombre,es_tarjeta').eq('user_id', userId),
+      supabase.from('suscripciones').select('id,nombre,monto,moneda,pago').eq('user_id', userId),
+      supabase.from('suscripciones_pagos').select('sub_id,mes,anio,pagado').eq('user_id', userId),
+    ]);
+
+  const esCredito = new Set((tarjetas ?? []).filter((t) => t.es_tarjeta).map((t) => String(t.id)));
+  const soloArs = (x: { monto: number | string; moneda?: string }) =>
+    (x.moneda ?? 'ARS') === 'USD' ? 0 : Number(x.monto);
+
+  const totalIngresos = (ingresos ?? []).reduce((a, i) => a + soloArs(i), 0);
+  const totalGastos = (gastosMes ?? [])
+    .filter((g) => !esCredito.has(String(g.pago)))
+    .reduce((a, g) => a + soloArs(g), 0);
+  const totalSubs = (subs ?? [])
+    .filter((sub) => !esCredito.has(String(sub.pago)))
+    .filter((sub) => (pagos ?? []).some((pg) =>
+      pg.sub_id === sub.id && pg.mes === mes + 1 && pg.anio === anio && pg.pagado === true))
+    .reduce((a, sub) => a + soloArs(sub), 0);
+
+  return { totalIngresos, totalGastos: totalGastos + totalSubs, balance: totalIngresos - totalGastos - totalSubs };
+}
+
+// Total de una tarjeta: lo del ciclo en curso y lo que se va a pagar (el ciclo
+// que cierra, más el interés estimado). Usa la misma lógica de ciclos y cuotas
+// que la app (módulo ciclos.js, verificado por tests/ciclos.spec.js).
+const INTERES_TARJETA = 0.0121;
+async function calcularTotalTarjeta(userId: string, tarjetaId: number, cfg: Record<string, unknown>) {
+  const [{ data: gastos }, { data: subs }] = await Promise.all([
+    supabase.from('gastos').select('monto,moneda,pago,fecha,cuotas').eq('user_id', userId).eq('pago', String(tarjetaId)),
+    supabase.from('suscripciones').select('monto,moneda,pago,dia').eq('user_id', userId).eq('pago', String(tarjetaId)),
+  ]);
+  const montoArs = (x: { monto: number | string; moneda?: string }) =>
+    (x.moneda ?? 'ARS') === 'USD' ? 0 : Number(x.monto);
+
+  const totalDeCiclo = (desde: Date, hasta: Date) => {
+    let total = 0;
+    for (const g of gastos ?? []) {
+      if (g.cuotas) {
+        const n = calcularCuotaActual(g.fecha, cfg, hasta);
+        if (n >= 1 && n <= g.cuotas) total += montoArs(g);
+      } else {
+        const f = new Date(g.fecha + 'T00:00:00');
+        if (f >= desde && f <= hasta) total += montoArs(g);
+      }
+    }
+    for (const sub of subs ?? []) {
+      // Un ciclo puede contener más de un débito de la misma suscripción.
+      let anio = desde.getFullYear(), mes = desde.getMonth(), guarda = 0;
+      while (guarda++ < 24) {
+        const dias = new Date(anio, mes + 1, 0).getDate();
+        const f = new Date(anio, mes, Math.min(sub.dia, dias));
+        if (f > hasta) break;
+        if (f >= desde) total += montoArs(sub);
+        const sig = new Date(anio, mes + 1, 1);
+        anio = sig.getFullYear(); mes = sig.getMonth();
+      }
+    }
+    return total;
+  };
+
+  const actual = cicloActual(cfg, new Date(hoyLocal() + 'T12:00:00'));
+  if (!actual) return null;
+  const enCurso = totalDeCiclo(actual.desde, actual.hasta);
+  return {
+    desde: actual.desde,
+    hasta: actual.hasta,
+    enCurso,
+    aPagar: Math.round(enCurso * (1 + INTERES_TARJETA)),
+    proximo: totalDeCiclo(sumarMesesFecha(actual.desde, 1), sumarMesesFecha(actual.hasta, 1)),
+  };
 }
 
 async function guardarGasto(
@@ -294,9 +425,10 @@ Deno.serve(async (req) => {
     return new Response('ok', { status: 200 });
   }
 
-  const [{ data: tarjetas }, { data: categorias }] = await Promise.all([
+  const [{ data: tarjetas }, { data: categorias }, { data: config }] = await Promise.all([
     supabase.from('tarjetas').select('id,nombre').eq('user_id', whUsuario.user_id),
     supabase.from('categorias').select('id,nombre').eq('user_id', whUsuario.user_id).eq('tipo', 'gasto'),
+    supabase.from('config').select('cierres').eq('user_id', whUsuario.user_id).maybeSingle(),
   ]);
 
   // Si quedó un gasto esperando medio de pago, este mensaje puede ser la
@@ -338,24 +470,86 @@ Deno.serve(async (req) => {
     entrada = audio;
   }
 
-  const extraido = await interpretarMensaje(
+  const intencion = await interpretarMensaje(
     entrada,
     (categorias ?? []).map((c) => c.nombre),
     (tarjetas ?? []).map((t) => t.nombre),
   );
 
-  console.log('[wa] interpretado:', JSON.stringify(extraido));
+  console.log('[wa] intención:', JSON.stringify(intencion));
 
-  if (!extraido) {
+  if (!intencion || intencion.tipo === 'desconocido') {
     await enviarWhatsapp(
       telefono,
       esAudio
-        ? 'No pude entender el gasto en ese audio. Probá hablando más claro el monto y en qué fue, o mandámelo por texto.'
-        : 'No entendí ese gasto. Probá algo como: "gasté 500 en el kiosco con débito".',
+        ? 'No te entendí. Podés contarme un gasto ("gasté 500 en el kiosco"), un ingreso ("cobré 300 mil"), o preguntarme cuánto te queda o cuánto tenés en una tarjeta.'
+        : 'No te entendí. Probá con:\n• "gasté 500 en el kiosco con débito"\n• "cobré 300 mil de sueldo"\n• "cuánta plata me queda"\n• "cuánto tengo en la Visa"',
     );
     return new Response('ok', { status: 200 });
   }
 
+  if (intencion.tipo === 'saldo') {
+    const s = await calcularSaldoDelMes(whUsuario.user_id);
+    const signo = s.balance >= 0 ? 'Te queda' : 'Estás en déficit de';
+    await enviarWhatsapp(
+      telefono,
+      `${signo} ${fmt(Math.abs(s.balance))} este mes.\n\n` +
+      `Ingresos: ${fmt(s.totalIngresos)}\n` +
+      `Gastos de bolsillo: ${fmt(s.totalGastos)}\n\n` +
+      `_No incluye lo de tarjetas de crédito, que se paga al vencimiento._`,
+    );
+    return new Response('ok', { status: 200 });
+  }
+
+  if (intencion.tipo === 'tarjeta') {
+    const cred = (tarjetas ?? []).filter((t) => cierresDe(config, t.id));
+    const elegida = intencion.tarjeta ? encontrarPorNombre(cred, intencion.tarjeta) : null;
+    if (!elegida) {
+      await enviarWhatsapp(
+        telefono,
+        cred.length
+          ? `¿De cuál tarjeta?\n${fmtLista(cred)}\n\nPreguntame por su nombre.`
+          : 'No tenés tarjetas de crédito con ciclo configurado en la app.',
+      );
+      return new Response('ok', { status: 200 });
+    }
+    const t = await calcularTotalTarjeta(whUsuario.user_id, elegida.id, cierresDe(config, elegida.id)!);
+    if (!t) {
+      await enviarWhatsapp(telefono, `No pude calcular el ciclo de ${elegida.nombre}. Revisá que tenga cierre configurado en la app.`);
+      return new Response('ok', { status: 200 });
+    }
+    const f = (d: Date) => d.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' });
+    await enviarWhatsapp(
+      telefono,
+      `*${elegida.nombre}*\nCiclo ${f(t.desde)} → ${f(t.hasta)}\n\n` +
+      `Gastado en este ciclo: ${fmt(t.enCurso)}\n` +
+      `A pagar (con interés est.): ${fmt(t.aPagar)}\n` +
+      `Proyectado próximo ciclo: ${fmt(t.proximo)}`,
+    );
+    return new Response('ok', { status: 200 });
+  }
+
+  if (intencion.tipo === 'ingreso') {
+    const { error } = await supabase.from('ingresos').insert({
+      id: nuevoId(),
+      user_id: whUsuario.user_id,
+      monto: intencion.monto,
+      descripcion: intencion.descripcion,
+      cat: intencion.categoria,
+      fecha: hoyLocal(),
+      moneda: intencion.moneda || 'ARS',
+    });
+    if (error) {
+      console.error('[wa] error insertando ingreso', error.message);
+      await enviarWhatsapp(telefono, 'Entendí el ingreso pero no lo pude guardar. Probá de nuevo en un rato.');
+      return new Response('ok', { status: 200 });
+    }
+    console.log('[wa] ingreso cargado para', whUsuario.user_id);
+    await enviarWhatsapp(telefono, `✅ Ingreso cargado: ${fmt(intencion.monto)} - ${intencion.descripcion}`);
+    return new Response('ok', { status: 200 });
+  }
+
+  const extraido = intencion.gasto;
   const tarjeta = encontrarPorNombre(tarjetas ?? [], extraido.medio_pago);
   const categoria = encontrarPorNombre(categorias ?? [], extraido.categoria);
   // Si no se pudo deducir la categoría, va a una categoría "Bot" para revisar
