@@ -115,3 +115,70 @@ test('los gastos sin categoría del bot aparecen para reasignar', async ({ page 
   await expect(page.locator('#sin-categoria-banner')).toContainText('1 gasto sin categoría');
   await expect(page.locator('#sin-categoria-list')).not.toContainText('almuerzo');
 });
+
+// Prepara una tarjeta con ciclo configurado y compras en cuotas de distinta
+// duración, para ejercitar el calendario de compromiso y el simulador.
+async function sembrarCuotas(page) {
+  await page.evaluate(() => {
+    const hoy = new Date();
+    const iso = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' +
+      String(d.getDate()).padStart(2, '0');
+    cats.push({ id: 9201, nombre: 'Compras', icono: 'box', color: '#748ffc', tipo: 'gasto' });
+    tarjetas.push({ id: 9202, nombre: 'Visa Test', icono: 'card', color: '#cc5de8', esTarjeta: true });
+    cierres[9202] = {
+      dia: 20,
+      cicloInicio: iso(new Date(hoy.getFullYear(), hoy.getMonth() - 1, 21)),
+      cicloCierre: iso(new Date(hoy.getFullYear(), hoy.getMonth(), 20)),
+    };
+    // Una de 3 cuotas (termina pronto) y otra de 12 (sigue mucho tiempo).
+    gastos.push({
+      id: 9203, monto: 10000, montoOriginal: 30000, cuotas: 3, pago: '9202',
+      desc: 'Corta', cat: 9201, fecha: iso(hoy), moneda: 'ARS', esFijo: false,
+      esReembolsable: false, cobrado: false,
+    });
+    gastos.push({
+      id: 9204, monto: 5000, montoOriginal: 60000, cuotas: 12, pago: '9202',
+      desc: 'Larga', cat: 9201, fecha: iso(hoy), moneda: 'ARS', esFijo: false,
+      esReembolsable: false, cobrado: false,
+    });
+  });
+}
+
+test('el calendario muestra el compromiso mes a mes y detecta cuándo baja', async ({ page }) => {
+  await sembrarCuotas(page);
+
+  const meses = await page.evaluate(() => compromisoPorMes(6).map((m) => m.total));
+  // Los primeros meses pagan las dos cuotas (15000); cuando termina la de 3,
+  // queda solo la de 12 (5000).
+  expect(meses[0]).toBe(15000);
+  expect(meses[meses.length - 1]).toBe(5000);
+  expect(meses[meses.length - 1]).toBeLessThan(meses[0]);
+
+  await page.evaluate(() => renderCalendarioCuotas());
+  const cal = page.locator('#cu-calendario');
+  await expect(cal).toContainText('Compromiso mes a mes');
+  await expect(cal).toContainText('tu compromiso baja');
+});
+
+test('el simulador suma la compra al compromiso ya existente', async ({ page }) => {
+  await sembrarCuotas(page);
+
+  const { base, con } = await page.evaluate(() => ({
+    base: compromisoPorMes(6).map((m) => m.total),
+    con: compromisoPorMes(6, { monto: 60000, cuotas: 6 }).map((m) => m.total),
+  }));
+  // La compra simulada agrega 10000 por mes durante 6 meses, sin tocar la base.
+  for (let i = 0; i < 6; i++) expect(con[i]).toBe(base[i] + 10000);
+
+  await page.evaluate(() => abrirSimulador());
+  await expect(page.locator('#modal-simulador')).toHaveClass(/open/);
+  // Sin monto no simula nada.
+  await expect(page.locator('#sim-resultado')).toContainText('Poné un monto');
+
+  await page.fill('#sim-monto', '60000');
+  await page.fill('#sim-cuotas', '6');
+  const res = page.locator('#sim-resultado');
+  await expect(res).toContainText('Cada mes vas a pagar');
+  await expect(res).toContainText('$10.000');
+  await expect(res).toContainText('durante 6 meses');
+});
