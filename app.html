@@ -1036,7 +1036,7 @@
   <div class="modal">
     <div class="modal-handle"></div>
     <div class="modal-title">Cierres y vencimientos</div>
-    <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.5">Solo para tarjetas de crédito. "Inicio" y "Cierre" son las fechas reales del ciclo que estás transitando ahora (tal cual figuran en tu resumen). Cuando pase el cierre, la app arranca el ciclo siguiente sola y te pide confirmar la fecha del próximo cierre. "Vence" es el día del mes del vencimiento.</p>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.5">Solo para tarjetas de crédito. "Inicio" y "Cierre" son las fechas reales del ciclo que estás transitando ahora (tal cual figuran en tu resumen). Cuando pase el cierre, la app arranca el ciclo siguiente sola y te pide confirmar la fecha del próximo cierre. "Vence" es el día del mes del vencimiento. Si el banco te corre el cierre de un mes a otro, cargá los cierres anteriores en cada tarjeta: las cuotas de las compras viejas se cuentan contra esas fechas reales en vez de suponer que siempre cerró el mismo día.</p>
     <div id="cierre-list"></div>
     <button class="btn-submit" onclick="saveCierres()">Guardar</button>
     <button class="btn-secondary" onclick="closeModals()">Cancelar</button>
@@ -1497,12 +1497,18 @@ function renderItemProyeccion(p){
 // cuotas están corriendo ese mes, como si ya estuvieras viviéndolo). Cada
 // tarjeta puede tener un día de cierre distinto, así que el punto de
 // referencia se calcula con el cierre real de esa tarjeta dentro de ese mes.
-function cuotasEnCiclo(mesCierre){
+function cuotasEnCiclo(mesPago){
   return gastos.filter(g=>g.cuotas&&getTarjeta(g.pago).esTarjeta).map(g=>{
-    const dc=cierres[g.pago]?.dia||31;
-    const diasEnMes=new Date(mesCierre.getFullYear(),mesCierre.getMonth()+1,0).getDate();
-    const refCierre=new Date(mesCierre.getFullYear(),mesCierre.getMonth(),Math.min(dc,diasEnMes));
-    return{...g,numCuota:calcularCuotaActual(g.fecha,cierres[g.pago]||dc,refCierre)};
+    const cfg=cierres[g.pago];
+    const dc=cfg?.dia||31;
+    // La ventana tiene que ser la misma que usa totalCicloTarjeta para el monto:
+    // el ciclo que se paga ese mes. Calcularla acá por separado ("día N de ese
+    // mes") hacía que en una tarjeta que cierra a fin de mes y vence al mes
+    // siguiente la lista mostrara las cuotas de un ciclo y el pago fuera de otro.
+    const ciclo=cfg?.dia?cicloQuePagasEn(cfg,mesPago):null;
+    const diasEnMes=new Date(mesPago.getFullYear(),mesPago.getMonth()+1,0).getDate();
+    const refCierre=ciclo?ciclo.hasta:new Date(mesPago.getFullYear(),mesPago.getMonth(),Math.min(dc,diasEnMes));
+    return{...g,numCuota:calcularCuotaActual(g.fecha,cfg||dc,refCierre)};
   }).filter(g=>g.numCuota>=1&&g.numCuota<=g.cuotas);
 }
 
@@ -1970,50 +1976,75 @@ function sumarMesCierre(anio,mes,diaCierre){
 }
 function cierreEnMes(anio,mes,dia){return new Date(anio,mes,clampDia(anio,mes,dia));}
 
-// Primer cierre que cubre a una compra, anclado en la fecha real de cierre del
-// ciclo. Sin este ancla, la secuencia de cierres se arma como "día N de todos
-// los meses", y si el ciclo real no cae así (ej. 28/8 → 1/10) se cuenta un
-// cierre que nunca existió y todas las cuotas quedan corridas una de más.
+// Todos los cierres reales que conocemos de una tarjeta, de más viejo a más
+// nuevo: los que se fueron archivando al confirmar cada cierre, el cierre
+// anterior (el día previo al inicio del ciclo vigente) y el cierre actual.
+// El banco corre la fecha de cierre por fines de semana y feriados, así que
+// "día N de todos los meses" es una suposición falsa: las cuotas hay que
+// contarlas contra las fechas que pasaron de verdad.
+function cierresConocidos(cfg){
+  if(!cfg||typeof cfg!=='object')return[];
+  const vistos=new Set(),out=[];
+  const agregar=f=>{if(!f||isNaN(f))return;const k=aISO(f);if(vistos.has(k))return;vistos.add(k);out.push(f);};
+  (Array.isArray(cfg.historial)?cfg.historial:[]).forEach(iso=>agregar(aFecha(iso)));
+  if(cfg.cicloInicio)agregar(sumarDias(aFecha(cfg.cicloInicio),-1));
+  if(cfg.cicloCierre)agregar(aFecha(cfg.cicloCierre));
+  return out.sort((a,b)=>a-b);
+}
+
+// Primer cierre que cubre a una compra. Una compra hecha el mismo día del
+// cierre entra en ese resumen.
 function primerCierreDeCompra(fC,cfg,diaCierre){
-  const ancla=(cfg&&typeof cfg==='object'&&cfg.cicloCierre)?aFecha(cfg.cicloCierre):null;
-  if(!ancla){
+  const conocidos=cierresConocidos(cfg);
+  if(!conocidos.length){
     return fC.getDate()>diaCierre
       ? sumarMesCierre(fC.getFullYear(),fC.getMonth(),diaCierre)
       : cierreEnMes(fC.getFullYear(),fC.getMonth(),diaCierre);
   }
-  // El inicio del ciclo es el día siguiente al cierre anterior, así que ese
-  // cierre anterior es un dato real y no hay que inferirlo por día del mes.
-  const cierreAnterior=cfg.cicloInicio?sumarDias(aFecha(cfg.cicloInicio),-1):null;
-  if(cierreAnterior&&fC>cierreAnterior&&fC<=ancla)return ancla; // compra dentro del ciclo vigente
-  if(fC>ancla){ // futuro: se asume mensual desde el cierre conocido
-    let c=ancla,guarda=0;
-    while(c<fC&&guarda++<600)c=sumarMesCierre(c.getFullYear(),c.getMonth(),ancla.getDate());
+  const primero=conocidos[0],ultimo=conocidos[conocidos.length-1];
+  if(fC<=primero){
+    // Más viejo que todo el historial: se retrocede mes a mes desde el cierre
+    // conocido más antiguo. Es una aproximación —no sabemos cuánto se corrió
+    // el cierre en esos meses— y mejora sola a medida que se junta historial.
+    let c=primero,guarda=0;
+    while(guarda++<600){
+      const p=new Date(c.getFullYear(),c.getMonth()-1,1);
+      const prev=cierreEnMes(p.getFullYear(),p.getMonth(),primero.getDate());
+      if(prev<fC)break;
+      c=prev;
+    }
     return c;
   }
-  // Pasado: se retrocede mensualmente desde el cierre anterior conocido.
-  const base=cierreAnterior||ancla,dia=base.getDate();
-  let anio=base.getFullYear(),mes=base.getMonth(),c=base,guarda=0;
-  while(c>=fC&&guarda++<600){
-    const p=new Date(anio,mes-1,1);anio=p.getFullYear();mes=p.getMonth();
-    const prev=cierreEnMes(anio,mes,dia);
-    if(prev<fC)break;
-    c=prev;
-  }
+  const cubre=conocidos.find(c=>c>=fC);
+  if(cubre)return cubre;
+  // Posterior al último cierre conocido: se proyecta con el día configurado,
+  // que es lo único que hay para el futuro.
+  let c=ultimo,guarda=0;
+  while(c<fC&&guarda++<600)c=sumarMesCierre(c.getFullYear(),c.getMonth(),diaCierre||c.getDate());
   return c;
 }
 
 // diaCierreOCfg puede ser el día de cierre (uso legacy) o el cfg de la tarjeta;
 // pasarle el cfg permite anclar los cierres a las fechas reales del ciclo.
-// Cierre siguiente a uno dado. No alcanza con sumar un mes: el ciclo vigente
-// tiene dos fechas conocidas (el cierre anterior, que sale del inicio del ciclo,
-// y el cierre actual) y entre ellas puede haber un salto que no es de un mes
-// (ej. 27/8 -> 1/10). Sumando meses a ciegas se inventa un cierre el 27/9 que
-// no existe, y todas las cuotas quedan adelantadas una.
+// Cierre siguiente a uno dado. Si el de partida es un cierre real conocido,
+// el siguiente es el próximo cierre real, no "un mes después": entre dos
+// cierres puede haber un salto que no es mensual (ej. 27/8 -> 1/10), y sumar
+// meses a ciegas inventa un cierre que nunca existió y corre todas las cuotas.
 function siguienteCierre(cfg,c){
-  const ancla=(cfg&&typeof cfg==='object'&&cfg.cicloCierre)?aFecha(cfg.cicloCierre):null;
-  const previo=(cfg&&typeof cfg==='object'&&cfg.cicloInicio)?sumarDias(aFecha(cfg.cicloInicio),-1):null;
-  if(ancla&&previo&&c.getTime()===previo.getTime())return ancla;
-  const dia=(ancla&&c>=ancla)?ancla.getDate():(previo?previo.getDate():c.getDate());
+  const conocidos=cierresConocidos(cfg);
+  if(conocidos.some(x=>x.getTime()===c.getTime())){
+    const prox=conocidos.find(x=>x>c);
+    if(prox)return prox;
+  }
+  // Sin cierres reales a mano se proyecta mensual. El día sale del ancla —el
+  // cierre conocido más viejo hacia atrás, el día configurado hacia adelante—
+  // y nunca de c.getDate(): un cierre que cayó en febrero viene recortado al
+  // 28, y arrastrarlo corre toda la secuencia un día, con lo que deja de
+  // coincidir con los cierres del historial y el salto no se dispara.
+  const primero=conocidos.length?conocidos[0]:null;
+  const ultimo=conocidos.length?conocidos[conocidos.length-1]:null;
+  const dia=(ultimo&&c>=ultimo)?((cfg&&cfg.dia)?cfg.dia:c.getDate())
+                               :(primero?primero.getDate():c.getDate());
   return sumarMesCierre(c.getFullYear(),c.getMonth(),dia);
 }
 
@@ -2321,9 +2352,43 @@ function cicloDe(tarjetaId){
   return c?{desdeISO:aISO(c.desde),hastaISO:aISO(c.hasta),pendiente:c.pendiente}:null;
 }
 
+// Cierres pasados que se están editando en el modal (por tarjeta). El modal
+// manda sobre lo guardado, así se puede borrar una fecha cargada mal.
+let cierresManuales={};
+
+function renderCierresPasados(tId){
+  const cont=document.getElementById('pasados-'+tId);
+  if(!cont)return;
+  const lista=(cierresManuales[tId]||[]).slice().sort().reverse();
+  cont.innerHTML=lista.length?lista.map(iso=>`
+    <span style="display:inline-flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--border);border-radius:99px;padding:3px 8px;font-size:11px;font-weight:600;margin:0 4px 4px 0">
+      ${aFecha(iso).toLocaleDateString('es-AR',{day:'numeric',month:'short',year:'2-digit'})}
+      <button type="button" onclick="quitarCierrePasado('${tId}','${iso}')" title="Quitar"
+        style="background:none;border:none;color:var(--muted);cursor:pointer;padding:0;font-size:13px;line-height:1">&times;</button>
+    </span>`).join(''):
+    '<span style="font-size:11px;color:var(--muted)">Ninguno cargado todavía</span>';
+}
+
+function agregarCierrePasado(tId){
+  const input=document.getElementById('nuevo-pasado-'+tId);
+  const iso=input?.value;
+  if(!iso)return;
+  cierresManuales[tId]=cierresManuales[tId]||[];
+  if(!cierresManuales[tId].includes(iso))cierresManuales[tId].push(iso);
+  input.value='';
+  renderCierresPasados(tId);
+}
+
+function quitarCierrePasado(tId,iso){
+  cierresManuales[tId]=(cierresManuales[tId]||[]).filter(x=>x!==iso);
+  renderCierresPasados(tId);
+}
+
 function openCierres(){
   const tc=tarjetas.filter(t=>t.esTarjeta);
   if(!tc.length){alert('No tenés tarjetas de crédito. Andá a Perfil → Medios de pago.');return;}
+  cierresManuales={};
+  tc.forEach(t=>{cierresManuales[t.id]=(Array.isArray(cierres[t.id]?.historial)?cierres[t.id].historial:[]).slice();});
   document.getElementById('cierre-list').innerHTML=tc.map(t=>`
     <div class="cierre-row">
       <div class="ico" style="background:${t.color}22">${ic(t.icono)}</div>
@@ -2350,7 +2415,18 @@ function openCierres(){
             style="width:80px;text-align:center;padding:6px;font-size:14px;font-weight:600;border:1px solid var(--border);background:var(--card);color:var(--text);border-radius:6px">
         </div>
       </div>
+      <div style="grid-column:1/-1;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Cierres anteriores (para contar bien las cuotas viejas)</div>
+        <div id="pasados-${t.id}" style="margin-bottom:6px"></div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input type="date" id="nuevo-pasado-${t.id}"
+            style="flex:1;min-width:0;text-align:center;padding:6px;font-size:13px;font-weight:600;border:1px solid var(--border);background:var(--card);color:var(--text);border-radius:6px">
+          <button type="button" onclick="agregarCierrePasado('${t.id}')"
+            style="background:var(--accent-dim);border:none;color:var(--accent);padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700">Agregar</button>
+        </div>
+      </div>
     </div>`).join('');
+  tc.forEach(t=>renderCierresPasados(t.id));
   openModalWithHistory('modal-cierres');
 }
 
@@ -2749,6 +2825,18 @@ async function saveCierres(){
       vencimiento:(vencimiento>=1&&vencimiento<=31)?vencimiento:null,
       limite:(!isNaN(limite)&&limite>0)?limite:null,
     };
+    // Cada cierre que se confirma se archiva. Es un dato real —y con cierre
+    // variable es lo único que permite contar cuotas bien— así que no se puede
+    // perder cuando el ciclo avanza al siguiente.
+    // Si el modal estuvo abierto, su lista manda (así una fecha borrada a mano
+    // queda borrada); si no, se parte de lo que ya estaba guardado.
+    const historial=cierresManuales[t.id]?cierresManuales[t.id].slice()
+                                         :(Array.isArray(anterior.historial)?anterior.historial.slice():[]);
+    const archivar=iso=>{if(iso&&!historial.includes(iso))historial.push(iso);};
+    if(anterior.cicloCierre&&anterior.cicloCierre!==cicloCierre)archivar(anterior.cicloCierre);
+    if(cicloInicio)archivar(aISO(sumarDias(aFecha(cicloInicio),-1)));
+    // El cierre vigente todavía no es pasado: se archiva cuando lo reemplacen.
+    nuevo.historial=historial.filter(iso=>iso!==cicloCierre).sort();
     if(anterior.dia&&anterior.dia!==nuevo.dia){
       // Guardamos el día viejo para no "revivir" gastos que ya habían cerrado con esa fecha
       nuevo.diaAnterior=anterior.dia;
