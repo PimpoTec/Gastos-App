@@ -182,3 +182,82 @@ test('el simulador suma la compra al compromiso ya existente', async ({ page }) 
   await expect(res).toContainText('$10.000');
   await expect(res).toContainText('durante 6 meses');
 });
+
+// Config real de una tarjeta del usuario: cierra el 10 y vence el 18 del MISMO
+// mes, así que el ciclo que cierra en octubre se paga en octubre. La regla
+// "se paga el mes siguiente al cierre" la dejaba un ciclo atrasada.
+test('Proyección usa el ciclo que vence en el mes, no el que cerró antes', async ({ page }) => {
+  const visto = await page.evaluate(() => {
+    const cfg = { dia: 10, vencimiento: 18, cicloInicio: '2026-09-11', cicloCierre: '2026-10-10' };
+    const oct = new Date(2026, 9, 20);
+    const nov = new Date(2026, 10, 20);
+    const c1 = cicloQuePagasEn(cfg, oct);
+    const c2 = cicloQuePagasEn(cfg, nov);
+    return {
+      pagaEnOctubre: aISO(c1.desde) + '..' + aISO(c1.hasta) + ' vence ' + aISO(c1.vence),
+      pagaEnNoviembre: aISO(c2.desde) + '..' + aISO(c2.hasta) + ' vence ' + aISO(c2.vence),
+    };
+  });
+  // Lo que se paga en octubre es el ciclo que cierra el 10/10 (vence 18/10),
+  // no el que cerró el 10/9.
+  expect(visto.pagaEnOctubre).toBe('2026-09-11..2026-10-10 vence 2026-10-18');
+  expect(visto.pagaEnNoviembre).toBe('2026-10-11..2026-11-10 vence 2026-11-18');
+});
+
+// La otra tarjeta del usuario: cierra el 27 y vence el 8, o sea al mes
+// siguiente. Acá sí el ciclo que cierra en agosto se paga en septiembre.
+test('una tarjeta que vence al mes siguiente se paga al mes siguiente', async ({ page }) => {
+  const visto = await page.evaluate(() => {
+    const cfg = { dia: 27, vencimiento: 8, cicloInicio: '2026-08-28', cicloCierre: '2026-09-27' };
+    const c = cicloQuePagasEn(cfg, new Date(2026, 9, 20)); // octubre
+    return aISO(c.desde) + '..' + aISO(c.hasta) + ' vence ' + aISO(c.vence);
+  });
+  expect(visto).toBe('2026-08-28..2026-09-27 vence 2026-10-08');
+});
+
+test('Proyección y el dashboard miden el mismo ciclo', async ({ page }) => {
+  // Ciclo irregular (arranca el 28, cierra el 1 del mes subsiguiente): es el
+  // caso donde Proyección recalculaba la ventana por su cuenta y no coincidía.
+  await page.evaluate(() => {
+    const hoy = new Date();
+    const iso = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' +
+      String(d.getDate()).padStart(2, '0');
+    cats.push({ id: 9301, nombre: 'Compras', icono: 'box', color: '#748ffc', tipo: 'gasto' });
+    tarjetas.push({ id: 9302, nombre: 'Irregular', icono: 'card', color: '#cc5de8', esTarjeta: true });
+    cierres[9302] = {
+      dia: 1,
+      vencimiento: 10,
+      cicloInicio: iso(new Date(hoy.getFullYear(), hoy.getMonth() - 1, 28)),
+      cicloCierre: iso(new Date(hoy.getFullYear(), hoy.getMonth() + 1, 1)),
+    };
+    // Un gasto de pago único justo en el tramo que Proyección se comía
+    // (entre el 28 del mes pasado y el 1 de este).
+    gastos.push({
+      id: 9303, monto: 77000, montoOriginal: null, cuotas: null, pago: '9302',
+      desc: 'En el tramo perdido', cat: 9301,
+      fecha: iso(new Date(hoy.getFullYear(), hoy.getMonth() - 1, 29)),
+      moneda: 'ARS', esFijo: false, esReembolsable: false, cobrado: false,
+    });
+  });
+
+  const { ventanaDash, ventanaProy, totalDash, totalProy } = await page.evaluate(() => {
+    const cfg = cierres[9302];
+    const ciclo = cicloActual(cfg);
+    // El mes en que vence este ciclo es el mes en que se paga.
+    const mesPago = vencimientoDeCiclo(cfg, ciclo.hasta);
+    const delMes = cicloQuePagasEn(cfg, mesPago);
+    const { ars } = getGastosPeriodoActual(9302, gastos);
+    return {
+      ventanaDash: aISO(ciclo.desde) + '..' + aISO(ciclo.hasta),
+      ventanaProy: aISO(delMes.desde) + '..' + aISO(delMes.hasta),
+      totalDash: ars,
+      totalProy: totalCicloTarjeta(9302, mesPago),
+    };
+  });
+
+  // El ciclo que se paga en el mes de su vencimiento es el mismo que ve el
+  // dashboard, con los mismos gastos adentro.
+  expect(ventanaProy).toBe(ventanaDash);
+  expect(totalProy).toBe(totalDash);
+  expect(totalDash).toBe(77000); // el gasto del tramo sí entra en los dos
+});
