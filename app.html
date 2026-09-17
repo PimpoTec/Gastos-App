@@ -1036,7 +1036,7 @@
   <div class="modal">
     <div class="modal-handle"></div>
     <div class="modal-title">Cierres y vencimientos</div>
-    <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.5">Solo para tarjetas de crédito. "Inicio" y "Cierre" son las fechas reales del ciclo que estás transitando ahora (tal cual figuran en tu resumen). Cuando pase el cierre, la app arranca el ciclo siguiente sola y te pide confirmar la fecha del próximo cierre. "Vence" es el día del mes del vencimiento. Si el banco te corre el cierre de un mes a otro, cargá los cierres anteriores en cada tarjeta: las cuotas de las compras viejas se cuentan contra esas fechas reales en vez de suponer que siempre cerró el mismo día.</p>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.5">Solo para tarjetas de crédito. "Inicio" y "Cierre" son las fechas reales del ciclo que estás transitando ahora (tal cual figuran en tu resumen). Cuando pase el cierre, la app arranca el ciclo siguiente sola y te pide confirmar la fecha del próximo cierre. "Vence" es la fecha real en que se paga el resumen que cierra en "Cierre" — con el mes, porque según la tarjeta se paga en el mismo mes del cierre o en el siguiente. Si el banco te corre el cierre de un mes a otro, cargá los cierres anteriores en cada tarjeta: las cuotas de las compras viejas se cuentan contra esas fechas reales en vez de suponer que siempre cerró el mismo día.</p>
     <div id="cierre-list"></div>
     <button class="btn-submit" onclick="saveCierres()">Guardar</button>
     <button class="btn-secondary" onclick="closeModals()">Cancelar</button>
@@ -1518,9 +1518,29 @@ function cuotasEnCiclo(mesPago){
 // del dashboard los suma — acá había quedado afuera, por eso no coincidían).
 // Fecha de vencimiento de un ciclo: el primer día "vencimiento" en o después
 // del cierre. Sin ese dato se aproxima con los 10 días habituales.
+// Cuántos meses hay entre el cierre y su vencimiento, sacado de la fecha real
+// del ciclo vigente. Es un dato que hay que tener guardado y no se puede
+// deducir: con un cierre el 1 de octubre, "vence el 4" puede ser el 4/10
+// (tres días) o el 4/11 (treinta y cuatro), y de eso depende en qué mes se
+// paga el resumen.
+function offsetVencimiento(cfg){
+  if(!cfg||!cfg.cicloCierre||!cfg.cicloVencimiento)return null;
+  const c=aFecha(cfg.cicloCierre),v=aFecha(cfg.cicloVencimiento);
+  if(!c||!v||isNaN(c)||isNaN(v))return null;
+  return(v.getFullYear()*12+v.getMonth())-(c.getFullYear()*12+c.getMonth());
+}
+
 function vencimientoDeCiclo(cfg,cierre){
   if(!cfg.vencimiento)return sumarDias(cierre,10);
   const enMes=(anio,mes)=>new Date(anio,mes,clampDia(anio,mes,cfg.vencimiento));
+  const off=offsetVencimiento(cfg);
+  if(off!==null){
+    const m=new Date(cierre.getFullYear(),cierre.getMonth()+off,1);
+    return enMes(m.getFullYear(),m.getMonth());
+  }
+  // Sin fecha real guardada: se asume el primer día de vencimiento en o
+  // después del cierre, que es lo más común pero falla si vence al mes
+  // siguiente y el cierre cae antes de ese día.
   let v=enMes(cierre.getFullYear(),cierre.getMonth());
   if(v<cierre){const n=new Date(cierre.getFullYear(),cierre.getMonth()+1,1);v=enMes(n.getFullYear(),n.getMonth());}
   return v;
@@ -2406,7 +2426,7 @@ function openCierres(){
         </div>
         <div style="display:flex;align-items:center;gap:6px">
           <span style="font-size:11px;color:var(--muted)">Vence</span>
-          <input type="date" id="vencimiento-${t.id}" value="${diaAFechaInput(cierres[t.id]?.vencimiento)}"
+          <input type="date" id="vencimiento-${t.id}" value="${cierres[t.id]?.cicloVencimiento||diaAFechaInput(cierres[t.id]?.vencimiento)}"
             style="width:132px;text-align:center;padding:6px;font-size:13px;font-weight:600;border:1px solid var(--border);background:var(--card);color:var(--text);border-radius:6px">
         </div>
         <div style="display:flex;align-items:center;gap:6px">
@@ -2811,7 +2831,8 @@ async function saveCierres(){
     const anterior=cierres[t.id]||{};
     const inicioISO=document.getElementById('inicio-'+t.id)?.value||'';
     const cierreISO=document.getElementById('cierre-'+t.id)?.value||'';
-    const vencimiento=fechaInputADia(document.getElementById('vencimiento-'+t.id)?.value);
+    const vencISO=document.getElementById('vencimiento-'+t.id)?.value||'';
+    const vencimiento=fechaInputADia(vencISO);
     const limite=parseFloat(document.getElementById('limite-'+t.id)?.value);
     // Vacío = no se toca lo que ya estaba guardado (nunca se borra la config sola).
     const cicloCierre=cierreISO||anterior.cicloCierre||null;
@@ -2823,6 +2844,9 @@ async function saveCierres(){
       // para proyectar ciclos futuros. Se deriva del cierre cargado.
       dia:cicloCierre?aFecha(cicloCierre).getDate():anterior.dia,
       vencimiento:(vencimiento>=1&&vencimiento<=31)?vencimiento:null,
+      // La fecha completa del vencimiento del ciclo vigente: de ahí sale en qué
+      // mes se paga cada resumen, que con el día suelto había que adivinar.
+      cicloVencimiento:vencISO||anterior.cicloVencimiento||null,
       limite:(!isNaN(limite)&&limite>0)?limite:null,
     };
     // Cada cierre que se confirma se archiva. Es un dato real —y con cierre
