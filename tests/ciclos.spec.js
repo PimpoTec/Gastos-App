@@ -75,3 +75,28 @@ test('la lógica de ciclos del bot coincide con la de la app', async ({ page }) 
   expect(enElBot.length).toBeGreaterThan(50); // que realmente esté comparando algo
   expect(enElBot).toEqual(enLaApp);
 });
+
+// Regresión del "cierre fantasma": con un ciclo irregular (cierre anterior el
+// 27/8, cierre real el 1/10) la secuencia de cierres se armaba sumando meses
+// desde el 27 e inventaba un cierre el 27/9 que nunca existió. Resultado: la
+// misma compra daba cuota 6 vista desde hoy y cuota 7 vista desde el cierre,
+// así que el dashboard la contaba y Proyección no.
+test('un ciclo irregular no inventa un cierre intermedio', async ({ page }) => {
+  await page.addInitScript(mockSupabase, defaultState());
+  await page.goto('/app.html');
+  await page.waitForSelector('#nav-gastos', { state: 'visible', timeout: 10000 });
+
+  const r = await page.evaluate(() => {
+    const cfg = { dia: 1, cicloInicio: '2026-08-28', cicloCierre: '2026-10-01', vencimiento: 4 };
+    return {
+      hoy: calcularCuotaActual('2026-04-13', cfg, new Date('2026-09-17T12:00:00')),
+      alCierre: calcularCuotaActual('2026-04-13', cfg, new Date('2026-10-01T12:00:00')),
+      // Compra dentro del ciclo vigente: tiene que ser la cuota 1, no la 2.
+      dentroDelCiclo: calcularCuotaActual('2026-08-29', cfg, new Date('2026-09-17T12:00:00')),
+    };
+  });
+
+  expect(r.hoy).toBe(6);
+  expect(r.alCierre).toBe(6); // el dashboard y Proyección ven la misma cuota
+  expect(r.dentroDelCiclo).toBe(1);
+});
