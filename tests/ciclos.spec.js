@@ -75,3 +75,64 @@ test('la lógica de ciclos del bot coincide con la de la app', async ({ page }) 
   expect(enElBot.length).toBeGreaterThan(50); // que realmente esté comparando algo
   expect(enElBot).toEqual(enLaApp);
 });
+
+// Regresión del "cierre fantasma": con un ciclo irregular (cierre anterior el
+// 27/8, cierre real el 1/10) la secuencia de cierres se armaba sumando meses
+// desde el 27 e inventaba un cierre el 27/9 que nunca existió. Resultado: la
+// misma compra daba cuota 6 vista desde hoy y cuota 7 vista desde el cierre,
+// así que el dashboard la contaba y Proyección no.
+test('un ciclo irregular no inventa un cierre intermedio', async ({ page }) => {
+  await page.addInitScript(mockSupabase, defaultState());
+  await page.goto('/app.html');
+  await page.waitForSelector('#nav-gastos', { state: 'visible', timeout: 10000 });
+
+  const r = await page.evaluate(() => {
+    const cfg = { dia: 1, cicloInicio: '2026-08-28', cicloCierre: '2026-10-01', vencimiento: 4 };
+    return {
+      hoy: calcularCuotaActual('2026-04-13', cfg, new Date('2026-09-17T12:00:00')),
+      alCierre: calcularCuotaActual('2026-04-13', cfg, new Date('2026-10-01T12:00:00')),
+      // Compra dentro del ciclo vigente: tiene que ser la cuota 1, no la 2.
+      dentroDelCiclo: calcularCuotaActual('2026-08-29', cfg, new Date('2026-09-17T12:00:00')),
+    };
+  });
+
+  expect(r.hoy).toBe(6);
+  expect(r.alCierre).toBe(6); // el dashboard y Proyección ven la misma cuota
+  expect(r.dentroDelCiclo).toBe(1);
+});
+
+// Con cierre variable, el historial de cierres reales es lo único que permite
+// contar bien las cuotas viejas. Caso real: la tarjeta cerró el 29/7, después
+// el banco corrió el cierre al 1/9, y el ciclo vigente cierra el 1/10.
+test('el historial de cierres ordena las cuotas cuando el cierre se mueve', async ({ page }) => {
+  await page.addInitScript(mockSupabase, defaultState());
+  await page.goto('/app.html');
+  await page.waitForSelector('#nav-gastos', { state: 'visible', timeout: 10000 });
+
+  const r = await page.evaluate(() => {
+    const cfg = {
+      dia: 1, cicloInicio: '2026-09-02', cicloCierre: '2026-10-01', vencimiento: 4,
+      historial: ['2026-07-29', '2026-09-01'],
+    };
+    const alCierre = f => calcularCuotaActual(f, cfg, new Date('2026-10-01T12:00:00'));
+    return {
+      distribucion: alCierre('2026-08-29'), // cerró el 1/9 → en octubre va la 2ª
+      estereo: alCierre('2026-09-08'),      // comprado ya dentro del ciclo vigente
+      cafetera: alCierre('2026-05-11'),
+      taladro: alCierre('2026-04-13'),      // 6 de 6: termina en octubre
+      celu: alCierre('2026-01-21'),
+      // La secuencia no puede saltear los cierres que no están en el historial:
+      // entre el 29/4 y el 29/7 hay meses que el banco cerró normal.
+      cierres: cierresConocidos(cfg).map(aISO),
+    };
+  });
+
+  expect(r).toEqual({
+    distribucion: 2,
+    estereo: 1,
+    cafetera: 5,
+    taladro: 6,
+    celu: 9,
+    cierres: ['2026-07-29', '2026-09-01', '2026-10-01'],
+  });
+});

@@ -261,3 +261,36 @@ test('Proyección y el dashboard miden el mismo ciclo', async ({ page }) => {
   expect(totalProy).toBe(totalDash);
   expect(totalDash).toBe(77000); // el gasto del tramo sí entra en los dos
 });
+
+// La lista "Cuotas en curso" de Proyección y el monto del pago tienen que
+// mirar el mismo ciclo. La lista armaba su fecha de referencia por su cuenta
+// ("día N de ese mes"), así que en una tarjeta que cierra el 27 y vence el 8
+// del mes siguiente mostraba las cuotas de un ciclo y cobraba las de otro.
+test('la lista de cuotas de Proyección usa el mismo ciclo que el pago', async ({ page }) => {
+  await page.addInitScript(mockSupabase, defaultState());
+  await page.goto('/app.html');
+  await page.waitForSelector('#nav-gastos', { state: 'visible', timeout: 10000 });
+  await page.waitForTimeout(1500);
+
+  const r = await page.evaluate(() => {
+    cats.push({ id: 9401, nombre: 'Compras', icono: 'box', color: '#748ffc', tipo: 'gasto' });
+    tarjetas.push({ id: 9402, nombre: 'Vence al mes siguiente', icono: 'card', color: '#cc5de8', esTarjeta: true });
+    cierres[9402] = { dia: 27, vencimiento: 8, cicloInicio: '2026-08-28', cicloCierre: '2026-09-27' };
+    gastos.push({ id: 9403, desc: 'Heladera', fecha: '2026-05-15', monto: 10000,
+                  moneda: 'ARS', cat: '9401', pago: '9402', cuotas: 6 });
+
+    const oct = new Date(2026, 9, 20);
+    const ciclo = cicloQuePagasEn(cierres[9402], oct);
+    const enLista = cuotasEnCiclo(oct).find(g => g.id === 9403);
+    return {
+      cierreDelCiclo: aISO(ciclo.hasta),
+      cuotaEnLista: enLista ? enLista.numCuota : null,
+      cuotaSegunElCiclo: calcularCuotaActual('2026-05-15', cierres[9402], ciclo.hasta),
+    };
+  });
+
+  // El ciclo que se paga en octubre cierra el 27/9, no el 27/10.
+  expect(r.cierreDelCiclo).toBe('2026-09-27');
+  expect(r.cuotaEnLista).toBe(r.cuotaSegunElCiclo);
+  expect(r.cuotaEnLista).toBe(5); // cierres 27/5, 27/6, 27/7, 27/8 y 27/9
+});
