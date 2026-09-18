@@ -398,27 +398,45 @@ test('una compra en su última cuota entra en el total de la tarjeta del mes que
   expect(r.total).toBe(12000);
 });
 
-// El número grande que se ve junto a cada tarjeta en Proyección tiene que
-// ser el total real que se va a pagar (cuotas + gastos de pago único +
-// suscripciones + fijos con tarjeta), no solo la parte de cuotas y
-// suscripciones. Antes mostraba únicamente eso último ("porMedio"), lo que
-// escondía los gastos sueltos del total y hacía parecer la tarjeta mucho
-// más barata de lo que era en realidad.
-test('el total de la tarjeta en Proyección incluye los gastos de pago único, no solo cuotas y subs', async ({ page }) => {
-  await page.evaluate(() => {
+// El botón "Actualizar pago real" tiene que seguir sumando los gastos de
+// pago único del ciclo vigente (no solo cuotas y subs) — eso no cambió.
+test('el pago real de la tarjeta incluye los gastos de pago único del ciclo vigente', async ({ page }) => {
+  const total = await page.evaluate(() => {
     cats.push({ id: 9801, nombre: 'Compras', icono: 'box', color: '#748ffc', tipo: 'gasto' });
     tarjetas.push({ id: 9802, nombre: 'Visa Suelta', icono: 'card', color: '#cc5de8', esTarjeta: true });
     cierres[9802] = { dia: 1, vencimiento: 4, cicloInicio: '2026-08-28', cicloCierre: '2026-10-01' };
-    // Compra de pago único (sin cuotas) dentro del ciclo vigente: no debería
-    // depender de ninguna cuota para entrar al total.
     gastos.push({ id: 9803, desc: 'Compra suelta grande', fecha: '2026-09-08', monto: 500000,
                   moneda: 'ARS', cat: 9801, pago: 9802, cuotas: null });
+    const oct = new Date(2026, 9, 20);
+    return totalCicloTarjeta(9802, oct);
+  });
+  expect(total).toBe(500000);
+});
+
+// El número grande junto a cada tarjeta NO es el pago real: es lo que se
+// viene DESPUÉS de ese pago (el resumen siguiente). Un gasto suelto del
+// ciclo que está por cerrar no tiene que aparecer ahí (ese ya está en el
+// pago real, abajo); uno cargado con fecha del ciclo siguiente sí.
+test('el número grande de la tarjeta muestra el resumen siguiente, no el pago real', async ({ page }) => {
+  await page.evaluate(() => {
+    cats.push({ id: 9811, nombre: 'Compras', icono: 'box', color: '#748ffc', tipo: 'gasto' });
+    tarjetas.push({ id: 9812, nombre: 'Visa Adelanto', icono: 'card', color: '#cc5de8', esTarjeta: true });
+    cierres[9812] = { dia: 1, vencimiento: 4, cicloInicio: '2026-08-28', cicloCierre: '2026-10-01' };
+    // Del ciclo que está por cerrar (28/8 al 1/10): no debería aparecer en
+    // el número grande, ya lo cuenta el pago real.
+    gastos.push({ id: 9813, desc: 'Del ciclo que ya está por cerrar', fecha: '2026-09-08', monto: 111000,
+                  moneda: 'ARS', cat: 9811, pago: 9812, cuotas: null });
+    // Ya cargado con fecha del ciclo siguiente (2/10 en adelante): tiene que
+    // aparecer en el número grande.
+    gastos.push({ id: 9814, desc: 'Ya cargado para el ciclo que viene', fecha: '2026-10-15', monto: 77000,
+                  moneda: 'ARS', cat: 9811, pago: 9812, cuotas: null });
   });
 
   await page.click('#nav-balance');
   await page.click('#subtab-proyeccion');
-  const texto = await page.locator('#proy-breakdown').innerText();
-  expect(texto).toContain('$500.000');
+  const fila = page.locator('.pago-row', { hasText: 'Visa Adelanto' });
+  const montoGrande = await fila.locator('.monto-grande').innerText();
+  expect(montoGrande).toBe('$77.000');
 });
 
 // Caso real reportado: cicloVencimiento quedó pegado a un ciclo viejo (un
