@@ -1542,6 +1542,12 @@ function offsetVencimiento(cfg){
   if(!cfg||!cfg.cicloCierre||!cfg.cicloVencimiento)return null;
   const c=aFecha(cfg.cicloCierre),v=aFecha(cfg.cicloVencimiento);
   if(!c||!v||isNaN(c)||isNaN(v))return null;
+  // Un vencimiento no puede caer antes que su propio cierre. Si el par
+  // guardado da eso, es que cicloCierre avanzó a un ciclo nuevo sin que
+  // cicloVencimiento se actualizara con él (quedó pegado al ciclo viejo):
+  // mejor ignorarlo y caer en la aproximación de abajo que confiar en un
+  // offset que manda la cuenta a un ciclo que no es.
+  if(v<c)return null;
   return(v.getFullYear()*12+v.getMonth())-(c.getFullYear()*12+c.getMonth());
 }
 

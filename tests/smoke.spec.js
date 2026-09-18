@@ -420,3 +420,25 @@ test('el total de la tarjeta en Proyección incluye los gastos de pago único, n
   const texto = await page.locator('#proy-breakdown').innerText();
   expect(texto).toContain('$500.000');
 });
+
+// Caso real reportado: cicloVencimiento quedó pegado a un ciclo viejo (un
+// mes antes de cicloCierre) porque el cierre avanzó al siguiente sin que el
+// usuario volviera a cargar el vencimiento. Con ese offset negativo,
+// cicloQuePagasEn saltaba un ciclo entero hacia adelante (y encima devolvía
+// un "vence" anterior a su propio "cierre", que es imposible), perdiendo
+// todos los gastos del ciclo real.
+test('un cicloVencimiento de un mes anterior al cierre no corre la ventana un ciclo de más', async ({ page }) => {
+  const r = await page.evaluate(() => {
+    const cfg = {
+      dia: 1, vencimiento: 4, cicloInicio: '2026-08-28', cicloCierre: '2026-10-01',
+      cicloVencimiento: '2026-09-04', // quedó del ciclo anterior, ya no corresponde
+    };
+    const mesPago = new Date(2026, 9, 20); // objetivo: octubre
+    const ciclo = cicloQuePagasEn(cfg, mesPago);
+    return ciclo && { desde: aISO(ciclo.desde), hasta: aISO(ciclo.hasta), vence: aISO(ciclo.vence) };
+  });
+
+  // Tiene que quedarse en el ciclo real (el que ya está cerrando el 1/10),
+  // no saltar al siguiente (2/10 al 1/11).
+  expect(r).toEqual({ desde: '2026-08-28', hasta: '2026-10-01', vence: '2026-10-04' });
+});
