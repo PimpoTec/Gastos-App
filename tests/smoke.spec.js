@@ -327,3 +327,45 @@ test('un gasto fijo con tarjeta entra al total de la tarjeta, no al disponible e
   expect(texto).toContain('-$20.000');
   expect(texto).not.toContain('-$15.000');
 });
+
+// Proyección se simplificó a un solo mes fijo (el que viene), sin navegación
+// a meses pasados o futuros: eso ya lo cubre el calendario de compromiso de
+// Cuotas, que sí necesita mirar varios meses adelante.
+test('Proyección solo muestra el mes que viene, sin botones de navegación', async ({ page }) => {
+  await page.click('#nav-balance');
+  await page.click('#subtab-proyeccion');
+  await expect(page.locator('#subpanel-proyeccion')).not.toContainText('Anterior');
+  await expect(page.locator('#subpanel-proyeccion')).not.toContainText('Siguiente');
+
+  const label = await page.locator('#proy-mes-label').innerText();
+  const esperado = await page.evaluate(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() + 1);
+    const l = d.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' });
+    return l.charAt(0).toUpperCase() + l.slice(1);
+  });
+  expect(label).toBe(esperado);
+});
+
+// La cuota que Proyección muestra para el mes que viene tiene que ser
+// siempre "la de hoy más una", sin importar cómo esté configurado el cierre
+// del mes que viene. Antes se recalculaba desde cero contra el ciclo futuro
+// (cierre + vencimiento), y en una tarjeta de ciclo irregular sin ese
+// cierre confirmado todavía, eso daba una cuota menos que la real.
+test('la cuota del mes que viene es la de hoy más una, no depende del cierre futuro', async ({ page }) => {
+  const r = await page.evaluate(() => {
+    cats.push({ id: 9601, nombre: 'Compras', icono: 'box', color: '#748ffc', tipo: 'gasto' });
+    tarjetas.push({ id: 9602, nombre: 'Ciclo largo', icono: 'card', color: '#cc5de8', esTarjeta: true });
+    // Ciclo irregular de más de dos meses, sin ningún cierre confirmado en
+    // el medio (el caso real: "empezó el 28 de julio y cierra el 1 de octubre").
+    cierres[9602] = { dia: 1, vencimiento: 4, cicloInicio: '2026-07-28', cicloCierre: '2026-10-01' };
+    gastos.push({ id: 9603, desc: 'Compra vieja', fecha: '2026-05-11', monto: 6000,
+                  moneda: 'ARS', cat: 9601, pago: 9602, cuotas: 6 });
+
+    const actualHoy = calcularCuotaActual('2026-05-11', cierres[9602]);
+    const enProximoMes = cuotasProximoMes().find(g => g.id === 9603);
+    return { actualHoy, numCuota: enProximoMes ? enProximoMes.numCuota : null };
+  });
+
+  expect(r.numCuota).toBe(r.actualHoy + 1);
+});

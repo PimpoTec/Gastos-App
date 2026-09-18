@@ -649,12 +649,7 @@
         <div id="ahorro-lista"></div>
       </div>
       <div class="subpanel" id="subpanel-proyeccion">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-          <button onclick="cambiarMesProyeccion(-1)" style="background:var(--card);border:1px solid var(--border-2);color:var(--text);padding:6px 12px;border-radius:99px;cursor:pointer;font-size:13px;font-weight:600">← Anterior</button>
-          <span id="proy-mes-nav-label" style="font-size:13px;font-weight:600;color:var(--muted-2)">—</span>
-          <button onclick="cambiarMesProyeccion(1)" style="background:var(--card);border:1px solid var(--border-2);color:var(--text);padding:6px 12px;border-radius:99px;cursor:pointer;font-size:13px;font-weight:600">Siguiente →</button>
-        </div>
-        <p style="font-size:12.5px;color:var(--muted);margin-bottom:16px;line-height:1.5">Simulá cómo te va a quedar la plata este mes. Tus gastos fijos ya se descuentan solos. Las cuotas y suscripciones son solo informativas: no restan del disponible. Para cada tarjeta podés tocar "Agregar pago real" y sumar automáticamente, como gasto planeado, lo que vas a pagar ese mes (cuotas + interés estimado) — o cargarlo vos a mano si preferís otro monto.</p>
+        <p style="font-size:12.5px;color:var(--muted);margin-bottom:16px;line-height:1.5">Simulá cómo te va a quedar la plata el mes que viene. Tus gastos fijos ya se descuentan solos. Las cuotas y suscripciones son solo informativas: no restan del disponible. Para cada tarjeta podés tocar "Agregar pago real" y sumar automáticamente, como gasto planeado, lo que vas a pagar ese mes (cuotas + interés estimado) — o cargarlo vos a mano si preferís otro monto.</p>
 
         <div class="section-title" style="margin-top:4px">Proyectado por medio de pago</div>
         <div class="pago-breakdown" id="proy-breakdown"></div>
@@ -662,10 +657,10 @@
         <div class="section-title">Ingresos proyectados <button class="btn-cfg" onclick="abrirModalProyeccion('ingreso')">+ Agregar</button></div>
         <div id="proy-ingresos-lista"></div>
 
-        <div class="section-title">Gastos fijos de este mes</div>
+        <div class="section-title">Gastos fijos del mes que viene</div>
         <div id="proy-fijos-lista"></div>
 
-        <div class="section-title">Cuotas en curso</div>
+        <div class="section-title">Cuotas que siguen el mes que viene</div>
         <div id="proy-cuotas-lista"></div>
 
         <div class="section-title">Suscripciones</div>
@@ -1475,10 +1470,11 @@ async function dbDeleteGastoFijo(id){await sb.from('gastos_fijos').delete().eq('
 // disponible. Lo único que resta es lo que el usuario carga a mano como gasto
 // planeado sin marcar "tarjeta" (por ejemplo, el pago de la tarjeta del mes
 // anterior, que él mismo agrega como un gasto más).
-function targetDateProyeccion(){const d=new Date();d.setDate(20);d.setMonth(d.getMonth()+mesOffsetProyeccion);return d;}
+// Proyección mira únicamente el mes que viene: no tiene sentido proyectar
+// más lejos (ese horizonte lo cubre el calendario de compromiso de Cuotas) ni
+// dejar navegar a meses pasados (eso ya es el balance real, no una proyección).
+function targetDateProyeccion(){const d=new Date();d.setDate(20);d.setMonth(d.getMonth()+1);return d;}
 function mesKeyProyeccion(){const d=targetDateProyeccion();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
-
-function cambiarMesProyeccion(delta){mesOffsetProyeccion+=delta;renderProyeccion();}
 
 function renderItemProyeccion(p){
   const esIngreso=p.tipo==='ingreso';
@@ -1493,10 +1489,27 @@ function renderItemProyeccion(p){
   </div>`;
 }
 
+// Cuota que vas a pagar el mes que viene: la que sigue a la que estás pagando
+// AHORA MISMO, según calcularCuotaActual con la fecha de hoy — la misma
+// cuenta que ya usa la pestaña Cuotas y que el usuario puede chequear contra
+// su resumen real. Evita recalcular desde cero el ciclo del mes que viene
+// (cierre + vencimiento), que en una tarjeta de ciclo irregular se
+// desincronizaba fácil del número que ya se sabe correcto hoy.
+function cuotaProximoMes(g){
+  return calcularCuotaActual(g.fecha,cierres[g.pago]||31)+1;
+}
+function cuotasProximoMes(){
+  return gastos.filter(g=>g.cuotas&&getTarjeta(g.pago).esTarjeta).map(g=>
+    ({...g,numCuota:cuotaProximoMes(g)})).filter(g=>g.numCuota<=g.cuotas);
+}
+
 // Cuotas de tarjeta activas durante el mes de "mesCierre" (informativo: qué
 // cuotas están corriendo ese mes, como si ya estuvieras viviéndolo). Cada
 // tarjeta puede tener un día de cierre distinto, así que el punto de
 // referencia se calcula con el cierre real de esa tarjeta dentro de ese mes.
+// Usada por el calendario de compromiso y el simulador de Cuotas, que sí
+// necesitan proyectar varios meses hacia adelante; Proyección usa la más
+// simple cuotasProximoMes() de arriba.
 function cuotasEnCiclo(mesPago){
   return gastos.filter(g=>g.cuotas&&getTarjeta(g.pago).esTarjeta).map(g=>{
     const cfg=cierres[g.pago];
@@ -1577,12 +1590,13 @@ function totalCicloTarjeta(tarjetaId,mesPago){
   const ciclo=cicloQuePagasEn(cfg,mesPago);
   if(!ciclo)return 0;
   const {desde,hasta}=ciclo;
-  const refCierre=hasta;
   const montoArs=g=>g.moneda==='USD'?(dolarBlue>0?g.monto*dolarBlue:0):g.monto;
   const totalGastos=gastos.filter(g=>String(g.pago)===String(tarjetaId)).reduce((total,g)=>{
+    // Las cuotas usan la cuenta simple (cuota de hoy + 1), no el ciclo del
+    // mes que viene: ver el comentario de cuotaProximoMes.
     if(g.cuotas){
-      const n=calcularCuotaActual(g.fecha,cfg,refCierre);
-      return(n>=1&&n<=g.cuotas)?total+montoArs(g):total;
+      const n=cuotaProximoMes(g);
+      return(n<=g.cuotas)?total+montoArs(g):total;
     }
     const fd=new Date(g.fecha+'T00:00:00');
     return(fd>=desde&&fd<=hasta)?total+montoArs(g):total;
@@ -1611,9 +1625,7 @@ function renderProyeccion(){
   const label=refDate.toLocaleDateString('es-AR',{month:'long',year:'numeric'});
   const labelCap=label.charAt(0).toUpperCase()+label.slice(1);
   const labelEl=document.getElementById('proy-mes-label');
-  const navLabelEl=document.getElementById('proy-mes-nav-label');
   if(labelEl)labelEl.textContent=labelCap;
-  if(navLabelEl)navLabelEl.textContent=labelCap;
 
   const ingresosItems=proyeccionItems.filter(p=>p.tipo==='ingreso'&&p.mes===mesKey);
   const totalIngresos=ingresosItems.reduce((a,p)=>a+montoArs(p),0);
@@ -1644,8 +1656,8 @@ function renderProyeccion(){
   const heroBox=document.getElementById('proy-hero');
   if(heroBox)heroBox.className='balance-hero'+(disponible<0?' negativo':' neutro');
 
-  // Cuotas y suscripciones activas para el mes objetivo (informativo, agrupado por medio de pago).
-  const cuotasActivas=cuotasEnCiclo(refDate);
+  // Cuotas y suscripciones activas para el mes que viene (informativo, agrupado por medio de pago).
+  const cuotasActivas=cuotasProximoMes();
   const porMedio={};
   const sumarMedio=(id,monto)=>{porMedio[id]=(porMedio[id]||0)+monto;};
   cuotasActivas.forEach(g=>sumarMedio(g.pago,montoArs(g)));
@@ -1896,7 +1908,7 @@ async function dbDeleteCat(id){await sb.from('categorias').delete().eq('id',id).
 // ── Estado ───────────────────────────────────────────
 const INTERES_TARJETA=0.0121; // recargo estimado por financiación, usado en dashboard y proyección
 let gastos=[],subs=[],ingresos=[],pagosSubs=[],cierres={},notifConfig={},tarjetas=[],cats=[],ahorros=[],proyeccionItems=[],gastosFijos=[];
-let mesOffsetProyeccion=1,selTipoProyeccion='ingreso';
+let selTipoProyeccion='ingreso';
 let detalleTarjetaId=null,offsetPeriodoDetalle=0;
 let dolarBlue=0, presupuestoMensual=0, mesOffset=0; // mesOffset: 0=este mes, -1=mes anterior, -2=hace 2 meses
 let biometricEnabled=false;
