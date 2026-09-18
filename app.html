@@ -649,7 +649,7 @@
         <div id="ahorro-lista"></div>
       </div>
       <div class="subpanel" id="subpanel-proyeccion">
-        <p style="font-size:12.5px;color:var(--muted);margin-bottom:16px;line-height:1.5">Simulá cómo te va a quedar la plata el mes que viene. Tus gastos fijos ya se descuentan solos. Las cuotas y suscripciones son solo informativas: no restan del disponible. Para cada tarjeta podés tocar "Agregar pago real" y sumar automáticamente, como gasto planeado, lo que vas a pagar ese mes (cuotas + interés estimado) — o cargarlo vos a mano si preferís otro monto.</p>
+        <p style="font-size:12.5px;color:var(--muted);margin-bottom:16px;line-height:1.5">Simulá cómo te va a quedar la plata el mes que viene. Tus gastos fijos ya se descuentan solos. El pago de cada tarjeta (cuotas + gastos + interés estimado) se suma solo, como gasto planeado, apenas hay algo que cobrar. Si después cargás más gastos podés tocar "Actualizar pago real" para refrescarlo, o editarlo vos a mano si preferís otro monto.</p>
 
         <div class="section-title" style="margin-top:4px">Proyectado por medio de pago</div>
         <div class="pago-breakdown" id="proy-breakdown"></div>
@@ -1688,8 +1688,20 @@ function renderProyeccion(){
       const pagoReal=tieneCierre?Math.round(totalPago*(1+INTERES_TARJETA)):0;
       const descPago=`Pago tarjeta ${t.nombre}`;
       const yaAgregado=proyeccionItems.some(p=>p.tipo==='gasto'&&p.mes===mesKey&&p.desc===descPago);
+      // El pago real se agrega solo, sin esperar que el usuario toque nada:
+      // apenas hay algo que cobrar y todavía no está cargado este mes, se
+      // suma como gasto planeado (así resta del disponible desde el vamos).
+      // El botón queda para actualizarlo a mano si después sumás más gastos,
+      // o para cargar otro monto vos mismo.
+      if(tieneCierre&&pagoReal>0&&!yaAgregado){
+        const key=t.id+'-'+mesKey;
+        if(!autoPagoTarjetaEnCurso.has(key)){
+          autoPagoTarjetaEnCurso.add(key);
+          agregarPagoTarjetaProyeccion(t.id).finally(()=>autoPagoTarjetaEnCurso.delete(key));
+        }
+      }
       const btnPago=tieneCierre&&pagoReal>0
-        ?`<button class="btn-pago-real" style="background:${t.color}18;border-color:${t.color}40;color:${t.color}" onclick="agregarPagoTarjetaProyeccion(${t.id})">${ic(yaAgregado?'refresh':'plus','icon-sm')} ${yaAgregado?`Actualizar pago real · ${fmt(pagoReal)}`:`Agregar pago real · ${fmt(pagoReal)}`}</button>`
+        ?`<button class="btn-pago-real" style="background:${t.color}18;border-color:${t.color}40;color:${t.color}" onclick="agregarPagoTarjetaProyeccion(${t.id})">${ic('refresh','icon-sm')} Actualizar pago real · ${fmt(pagoReal)}</button>`
         :'';
       return`<div class="pago-row" style="--row-accent:${t.color}${total?'':';opacity:0.6'}">
         <div class="row-top">
@@ -1918,6 +1930,10 @@ async function dbDeleteCat(id){await sb.from('categorias').delete().eq('id',id).
 const INTERES_TARJETA=0.0121; // recargo estimado por financiación, usado en dashboard y proyección
 let gastos=[],subs=[],ingresos=[],pagosSubs=[],cierres={},notifConfig={},tarjetas=[],cats=[],ahorros=[],proyeccionItems=[],gastosFijos=[];
 let selTipoProyeccion='ingreso';
+// Tarjetas para las que ya se disparó el alta automática del pago real este
+// mes, para no reintentar el guardado en cada re-render mientras la
+// promesa está en vuelo (renderProyeccion se llama seguido).
+const autoPagoTarjetaEnCurso=new Set();
 let detalleTarjetaId=null,offsetPeriodoDetalle=0;
 let dolarBlue=0, presupuestoMensual=0, mesOffset=0; // mesOffset: 0=este mes, -1=mes anterior, -2=hace 2 meses
 let biometricEnabled=false;

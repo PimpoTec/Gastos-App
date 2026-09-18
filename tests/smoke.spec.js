@@ -442,3 +442,30 @@ test('un cicloVencimiento de un mes anterior al cierre no corre la ventana un ci
   // no saltar al siguiente (2/10 al 1/11).
   expect(r).toEqual({ desde: '2026-08-28', hasta: '2026-10-01', vence: '2026-10-04' });
 });
+
+// El pago de la tarjeta tiene que restar del disponible solo, sin que el
+// usuario tenga que tocar "Agregar pago real": apenas hay algo que cobrar
+// y todavía no está cargado este mes, se agrega como gasto planeado.
+test('el pago de la tarjeta se agrega solo al disponible, sin tocar ningún botón', async ({ page }) => {
+  await page.evaluate(() => {
+    cats.push({ id: 9901, nombre: 'Compras', icono: 'box', color: '#748ffc', tipo: 'gasto' });
+    tarjetas.push({ id: 9902, nombre: 'Visa Auto', icono: 'card', color: '#cc5de8', esTarjeta: true });
+    cierres[9902] = { dia: 1, vencimiento: 4, cicloInicio: '2026-08-28', cicloCierre: '2026-10-01' };
+    gastos.push({ id: 9903, desc: 'Compra suelta', fecha: '2026-09-08', monto: 100000,
+                  moneda: 'ARS', cat: 9901, pago: 9902, cuotas: null });
+  });
+
+  await page.click('#nav-balance');
+  await page.click('#subtab-proyeccion');
+  // Se agrega de forma asincrónica (hay un guardado a Supabase de por medio).
+  await page.waitForFunction(() =>
+    proyeccionItems.some(p => p.tipo === 'gasto' && p.desc === 'Pago tarjeta Visa Auto'));
+
+  const texto = await page.locator('#proy-gastos-lista').innerText();
+  expect(texto).toContain('Pago tarjeta Visa Auto');
+  const disponible = await page.evaluate(() => {
+    const item = proyeccionItems.find(p => p.desc === 'Pago tarjeta Visa Auto');
+    return item.monto;
+  });
+  expect(disponible).toBeGreaterThanOrEqual(100000); // incluye interés estimado
+});
