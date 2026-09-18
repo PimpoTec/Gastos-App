@@ -1489,14 +1489,16 @@ function renderItemProyeccion(p){
   </div>`;
 }
 
-// Cuota que vas a pagar el mes que viene: la que sigue a la que estás pagando
-// AHORA MISMO, según calcularCuotaActual con la fecha de hoy — la misma
-// cuenta que ya usa la pestaña Cuotas y que el usuario puede chequear contra
-// su resumen real. Evita recalcular desde cero el ciclo del mes que viene
-// (cierre + vencimiento), que en una tarjeta de ciclo irregular se
-// desincronizaba fácil del número que ya se sabe correcto hoy.
+// Cuota que se cobra en el próximo resumen: calcularCuotaActual ya devuelve
+// la cuota que está corriendo AHORA (la que todavía no cerró y va a
+// facturarse en el próximo cierre), no la última ya pagada — así que no hay
+// que sumarle nada. Es la misma cuenta que usa la pestaña Cuotas, así el
+// usuario puede chequearla contra su resumen real. Evita recalcular desde
+// cero el ciclo del mes que viene (cierre + vencimiento), que en una tarjeta
+// de ciclo irregular se desincronizaba fácil del número que ya se sabe
+// correcto hoy.
 function cuotaProximoMes(g){
-  return calcularCuotaActual(g.fecha,cierres[g.pago]||31)+1;
+  return calcularCuotaActual(g.fecha,cierres[g.pago]||31);
 }
 function cuotasProximoMes(){
   return gastos.filter(g=>g.cuotas&&getTarjeta(g.pago).esTarjeta).map(g=>

@@ -348,11 +348,13 @@ test('Proyección solo muestra el mes que viene, sin botones de navegación', as
 });
 
 // La cuota que Proyección muestra para el mes que viene tiene que ser
-// siempre "la de hoy más una", sin importar cómo esté configurado el cierre
-// del mes que viene. Antes se recalculaba desde cero contra el ciclo futuro
-// (cierre + vencimiento), y en una tarjeta de ciclo irregular sin ese
-// cierre confirmado todavía, eso daba una cuota menos que la real.
-test('la cuota del mes que viene es la de hoy más una, no depende del cierre futuro', async ({ page }) => {
+// siempre la misma que ya muestra la pestaña Cuotas (calcularCuotaActual con
+// la fecha de hoy: esa YA es la cuota corriendo ahora, la que se factura en
+// el próximo cierre — no hay que sumarle nada más). Antes se recalculaba
+// desde cero contra el ciclo futuro (cierre + vencimiento), y en una tarjeta
+// de ciclo irregular sin ese cierre confirmado todavía, eso daba una cuota
+// menos que la real.
+test('la cuota del mes que viene es la misma que ya muestra la pestaña Cuotas', async ({ page }) => {
   const r = await page.evaluate(() => {
     cats.push({ id: 9601, nombre: 'Compras', icono: 'box', color: '#748ffc', tipo: 'gasto' });
     tarjetas.push({ id: 9602, nombre: 'Ciclo largo', icono: 'card', color: '#cc5de8', esTarjeta: true });
@@ -367,5 +369,31 @@ test('la cuota del mes que viene es la de hoy más una, no depende del cierre fu
     return { actualHoy, numCuota: enProximoMes ? enProximoMes.numCuota : null };
   });
 
-  expect(r.numCuota).toBe(r.actualHoy + 1);
+  expect(r.numCuota).toBe(r.actualHoy);
+});
+
+// Regresión puntual: una compra que está en su ÚLTIMA cuota tiene que seguir
+// entrando en el total de "Agregar pago real" del mes que viene (todavía se
+// está pagando). Sumarle uno a la cuota actual la excluía por completo
+// (numCuota terminaba siendo cuotas+1, mayor a cuotas), lo que hacía que el
+// total de la tarjeta en Proyección diera muy por debajo del real.
+test('una compra en su última cuota entra en el total de la tarjeta del mes que viene', async ({ page }) => {
+  const r = await page.evaluate(() => {
+    cats.push({ id: 9701, nombre: 'Compras', icono: 'box', color: '#748ffc', tipo: 'gasto' });
+    tarjetas.push({ id: 9702, nombre: 'Con última cuota', icono: 'card', color: '#cc5de8', esTarjeta: true });
+    cierres[9702] = { dia: 27, vencimiento: 8, cicloInicio: '2026-08-28', cicloCierre: '2026-09-27' };
+    // Compra vieja de sobra para que, sea cual sea "hoy", ya haya cruzado
+    // varios cierres. Le ponemos como total de cuotas exactamente la que
+    // está corriendo ahora mismo, para que hoy sea justo su ÚLTIMA cuota
+    // (el caso que el bug del "+1" rompía: quedaba afuera del total).
+    const fecha = '2020-01-15';
+    const actual = calcularCuotaActual(fecha, cierres[9702]);
+    gastos.push({ id: 9703, desc: 'Termina ahora', fecha, monto: 12000,
+                  moneda: 'ARS', cat: 9701, pago: 9702, cuotas: actual });
+
+    const oct = new Date(2026, 9, 20);
+    return { total: totalCicloTarjeta(9702, oct) };
+  });
+
+  expect(r.total).toBe(12000);
 });
