@@ -487,3 +487,30 @@ test('el pago de la tarjeta se agrega solo al disponible, sin tocar ningún bot�
   });
   expect(disponible).toBeGreaterThanOrEqual(100000); // incluye interés estimado
 });
+
+// Tocar la fila de un medio de pago en Proyección tiene que abrir el
+// detalle con únicamente lo cargado con ESE medio (cuotas, subs, fijos y
+// gastos sueltos), no mezclado con lo de otras tarjetas.
+test('tocar una tarjeta en Proyección muestra solo sus propios movimientos', async ({ page }) => {
+  await page.evaluate(() => {
+    cats.push({ id: 9921, nombre: 'Compras', icono: 'box', color: '#748ffc', tipo: 'gasto' });
+    tarjetas.push({ id: 9922, nombre: 'Visa Detalle', icono: 'card', color: '#cc5de8', esTarjeta: true });
+    tarjetas.push({ id: 9923, nombre: 'Otra Tarjeta', icono: 'card', color: '#51cf66', esTarjeta: true });
+    cierres[9922] = { dia: 1, vencimiento: 4, cicloInicio: '2026-08-28', cicloCierre: '2026-10-01' };
+    cierres[9923] = { dia: 1, vencimiento: 4, cicloInicio: '2026-08-28', cicloCierre: '2026-10-01' };
+    gastos.push({ id: 9924, desc: 'Zapatillas mías', fecha: '2026-08-30', monto: 60000,
+                  moneda: 'ARS', cat: 9921, pago: 9922, cuotas: null });
+    gastos.push({ id: 9925, desc: 'Compra de la otra tarjeta', fecha: '2026-08-30', monto: 90000,
+                  moneda: 'ARS', cat: 9921, pago: 9923, cuotas: null });
+  });
+
+  await page.click('#nav-balance');
+  await page.click('#subtab-proyeccion');
+  const fila = page.locator('.pago-row', { hasText: 'Visa Detalle' }).locator('.row-top');
+  await fila.click();
+  await expect(page.locator('#modal-detalle-medio')).toHaveClass(/open/);
+  await expect(page.locator('#detalle-medio-titulo')).toHaveText('Visa Detalle');
+  const texto = await page.locator('#detalle-medio-cont').innerText();
+  expect(texto).toContain('Zapatillas mías');
+  expect(texto).not.toContain('Compra de la otra tarjeta');
+});

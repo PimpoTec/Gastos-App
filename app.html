@@ -1007,6 +1007,17 @@
   </div>
 </div>
 
+<!-- Modal Detalle de medio de pago (Proyección) -->
+<div class="modal-overlay" id="modal-detalle-medio">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="detalle-medio-titulo">Medio de pago</div>
+    <p style="font-size:12.5px;color:var(--muted);margin-bottom:12px;line-height:1.5">Todo lo que tenés cargado con este medio de pago.</p>
+    <div id="detalle-medio-cont"></div>
+    <button class="btn-secondary" onclick="closeModals()">Cerrar</button>
+  </div>
+</div>
+
 <!-- Modal Simulador de compra -->
 <div class="modal-overlay" id="modal-simulador">
   <div class="modal">
@@ -1727,7 +1738,7 @@ function renderProyeccion(){
         ?`<button class="btn-pago-real" style="background:${t.color}18;border-color:${t.color}40;color:${t.color}" onclick="agregarPagoTarjetaProyeccion(${t.id})">${ic('refresh','icon-sm')} Actualizar pago real · ${fmt(pagoReal)}</button>`
         :'';
       return`<div class="pago-row" style="--row-accent:${t.color}${total?'':';opacity:0.6'}">
-        <div class="row-top">
+        <div class="row-top" style="cursor:pointer" onclick="abrirDetalleMedioProyeccion(${t.id})">
           <div class="ico" style="background:${t.color}22">${ic(t.icono)}</div>
           <div class="info"><div class="name">${t.nombre}</div><div class="detail">${t.esTarjeta?'Tarjeta de crédito':'Débito'} · no resta del disponible</div></div>
           <div class="monto-grande" style="color:${t.color}">${fmt(total)}</div>
@@ -1808,6 +1819,46 @@ async function agregarPagoTarjetaProyeccion(tarjetaId){
   await dbUpsertProyeccionItem(newP);
   proyeccionItems=existente?proyeccionItems.map(p=>p.id===existente.id?newP:p):[newP,...proyeccionItems];
   renderProyeccion();
+}
+
+// Detalle de todo lo cargado con un medio de pago puntual, para cuando el
+// usuario toca la fila de esa tarjeta/débito en Proyección y quiere ver
+// exactamente qué compone el número, no solo el total.
+function abrirDetalleMedioProyeccion(tarjetaId){
+  const t=tarjetas.find(x=>x.id===tarjetaId);
+  if(!t)return;
+  const montoArs=g=>g.moneda==='USD'?(dolarBlue>0?g.monto*dolarBlue:0):g.monto;
+  document.getElementById('detalle-medio-titulo').textContent=t.nombre;
+
+  const item=(icono,desc,meta,monto)=>`<div class="gasto-item">
+    <div class="ico">${ic(icono)}</div>
+    <div class="info"><div class="desc">${desc}</div><div class="meta">${meta}</div></div>
+    <div class="amount">${fmt(monto)}</div>
+  </div>`;
+  const seccion=(titulo,htmlItems)=>htmlItems.length?
+    `<div class="section-title" style="margin-top:14px">${titulo}</div>${htmlItems.join('')}`:'';
+
+  const cuotas=cuotasProximoMes().filter(g=>String(g.pago)===String(t.id));
+  const subsMedio=subs.filter(s=>String(s.pago)===String(t.id));
+  const fijosMedio=gastosFijos.filter(f=>String(f.pago)===String(t.id));
+  const sueltos=gastos.filter(g=>!g.cuotas&&String(g.pago)===String(t.id))
+    .sort((a,b)=>new Date(b.fecha)-new Date(a.fecha)).slice(0,30);
+
+  let html='';
+  html+=seccion('Cuotas que siguen el mes que viene',cuotas.map(g=>
+    item(getCat(g.cat,'gasto').icono,g.desc,`Cuota ${g.numCuota}/${g.cuotas}`,montoArs(g))));
+  html+=seccion('Suscripciones',subsMedio.map(s=>
+    item(getCat(s.cat,'sub').icono,s.nombre,'Suscripción',montoArs(s))));
+  html+=seccion('Gastos fijos',fijosMedio.map(f=>{
+    const c=getCatFijo(f.cat);
+    return item(c.icono,f.nombre,f.frecuencia==='anual'?`Anual · ${MESES_NOMBRE[f.mes]}`:c.nombre,montoArs(f));
+  }));
+  html+=seccion('Gastos de pago único',sueltos.map(g=>
+    item(getCat(g.cat,'gasto').icono,g.desc,new Date(g.fecha+'T00:00:00').toLocaleDateString('es-AR',{day:'numeric',month:'short'}),montoArs(g))));
+
+  const cont=document.getElementById('detalle-medio-cont');
+  cont.innerHTML=html||`<div class="empty"><div class="ico">${ic('check-circle')}</div><p style="font-weight:600;font-size:14px">Sin movimientos cargados con ${t.nombre}</p></div>`;
+  openModalWithHistory('modal-detalle-medio');
 }
 
 function abrirModalProyeccion(tipo,id=null){
