@@ -1666,18 +1666,19 @@ function renderProyeccion(){
   subs.forEach(s=>sumarMedio(s.pago,montoArs(s)));
   fijosTarjeta.forEach(f=>sumarMedio(f.pago,montoArs(f)));
 
-  // El "pago real" es la liquidación cuyo VENCIMIENTO cae en el mes proyectado
-  // (no necesariamente la que cerró el mes anterior: depende de cuántos días
-  // pasan entre cierre y vencimiento en cada tarjeta). Incluye cuotas, gastos
-  // de pago único y suscripciones de ese período. Es distinto del número
-  // informativo de arriba, que son las cuotas corriendo ese mes.
-
+  // El total que se muestra por tarjeta tiene que ser el que realmente vas a
+  // pagar: cuotas + suscripciones + gastos de pago único + fijos con tarjeta
+  // de ese período (totalCicloTarjeta), no solo la parte de cuotas/subs de
+  // "porMedio". Mostrar nada más que cuotas y subs ahí escondía los gastos
+  // sueltos del total y hacía parecer la tarjeta mucho más barata de lo que
+  // es. Para medios sin cierre configurado (débito, efectivo) no hay ese
+  // cálculo de período, así que se sigue usando la suma informativa.
   const breakdown=document.getElementById('proy-breakdown');
   if(breakdown){
     breakdown.innerHTML=tarjetas.length?tarjetas.map(t=>{
-      const total=porMedio[t.id]||0;
       const tieneCierre=t.esTarjeta&&cierres[t.id]?.dia;
       const totalPago=tieneCierre?totalCicloTarjeta(t.id,refDate):0;
+      const total=tieneCierre?totalPago:(porMedio[t.id]||0);
       const pagoReal=tieneCierre?Math.round(totalPago*(1+INTERES_TARJETA)):0;
       const descPago=`Pago tarjeta ${t.nombre}`;
       const yaAgregado=proyeccionItems.some(p=>p.tipo==='gasto'&&p.mes===mesKey&&p.desc===descPago);

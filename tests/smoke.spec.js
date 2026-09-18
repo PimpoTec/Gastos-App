@@ -397,3 +397,26 @@ test('una compra en su última cuota entra en el total de la tarjeta del mes que
 
   expect(r.total).toBe(12000);
 });
+
+// El número grande que se ve junto a cada tarjeta en Proyección tiene que
+// ser el total real que se va a pagar (cuotas + gastos de pago único +
+// suscripciones + fijos con tarjeta), no solo la parte de cuotas y
+// suscripciones. Antes mostraba únicamente eso último ("porMedio"), lo que
+// escondía los gastos sueltos del total y hacía parecer la tarjeta mucho
+// más barata de lo que era en realidad.
+test('el total de la tarjeta en Proyección incluye los gastos de pago único, no solo cuotas y subs', async ({ page }) => {
+  await page.evaluate(() => {
+    cats.push({ id: 9801, nombre: 'Compras', icono: 'box', color: '#748ffc', tipo: 'gasto' });
+    tarjetas.push({ id: 9802, nombre: 'Visa Suelta', icono: 'card', color: '#cc5de8', esTarjeta: true });
+    cierres[9802] = { dia: 1, vencimiento: 4, cicloInicio: '2026-08-28', cicloCierre: '2026-10-01' };
+    // Compra de pago único (sin cuotas) dentro del ciclo vigente: no debería
+    // depender de ninguna cuota para entrar al total.
+    gastos.push({ id: 9803, desc: 'Compra suelta grande', fecha: '2026-09-08', monto: 500000,
+                  moneda: 'ARS', cat: 9801, pago: 9802, cuotas: null });
+  });
+
+  await page.click('#nav-balance');
+  await page.click('#subtab-proyeccion');
+  const texto = await page.locator('#proy-breakdown').innerText();
+  expect(texto).toContain('$500.000');
+});
