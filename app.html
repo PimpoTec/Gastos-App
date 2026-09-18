@@ -1591,7 +1591,17 @@ function totalCicloTarjeta(tarjetaId,mesPago){
   // debitan dentro de este ciclo (pagadas o no, porque igual las vas a pagar).
   const totalSubs=subs.filter(s=>String(s.pago)===String(tarjetaId)).reduce((total,s)=>
     total+debitosSubEnPeriodo(s,desde,hasta).length*montoArs(s),0);
-  return totalGastos+totalSubs;
+  // Gastos fijos pagados con esta tarjeta (ej: un seguro en débito automático):
+  // los mensuales se cobran en todo ciclo, los anuales solo si su mes cae
+  // dentro de este ciclo puntual.
+  const totalFijosTarjeta=gastosFijos.filter(f=>String(f.pago)===String(tarjetaId)).reduce((total,f)=>{
+    if(f.frecuencia==='anual'){
+      const cae=f.mes===(desde.getMonth()+1)||f.mes===(hasta.getMonth()+1);
+      return cae?total+montoArs(f):total;
+    }
+    return total+montoArs(f);
+  },0);
+  return totalGastos+totalSubs+totalFijosTarjeta;
 }
 
 function renderProyeccion(){
@@ -1612,11 +1622,16 @@ function renderProyeccion(){
   const gastosNoTarjeta=gastosItems.filter(p=>!p.esTarjeta);
   const totalGastosNoTarjeta=gastosNoTarjeta.reduce((a,p)=>a+montoArs(p),0);
 
-  // Gastos fijos: los mensuales siempre, los anuales solo si vencen en el mes objetivo. Restan del disponible
-  // porque ya se sabe el monto real (no son una proyección hipotética como "gastos que planeás").
+  // Gastos fijos: los mensuales siempre, los anuales solo si vencen en el mes objetivo. Restan del
+  // disponible porque ya se sabe el monto real (no son una proyección hipotética como "gastos que
+  // planeás") — salvo los que se pagan con tarjeta de crédito, que no salen de la plata en mano este
+  // mes: entran al total de la tarjeta y solo restan cuando se agrega el pago real de esa tarjeta.
   const mesObjetivoNum=refDate.getMonth()+1;
   const fijosDelMes=gastosFijos.filter(f=>f.frecuencia!=='anual'||f.mes===mesObjetivoNum);
-  const totalFijos=fijosDelMes.reduce((a,f)=>a+montoArs(f),0);
+  const fijoEsTarjeta=f=>getTarjeta(f.pago).esTarjeta;
+  const fijosNoTarjeta=fijosDelMes.filter(f=>!fijoEsTarjeta(f));
+  const fijosTarjeta=fijosDelMes.filter(fijoEsTarjeta);
+  const totalFijos=fijosNoTarjeta.reduce((a,f)=>a+montoArs(f),0);
 
   const disponible=totalIngresos-totalFijos-totalGastosNoTarjeta;
 
@@ -1635,6 +1650,7 @@ function renderProyeccion(){
   const sumarMedio=(id,monto)=>{porMedio[id]=(porMedio[id]||0)+monto;};
   cuotasActivas.forEach(g=>sumarMedio(g.pago,montoArs(g)));
   subs.forEach(s=>sumarMedio(s.pago,montoArs(s)));
+  fijosTarjeta.forEach(f=>sumarMedio(f.pago,montoArs(f)));
 
   // El "pago real" es la liquidación cuyo VENCIMIENTO cae en el mes proyectado
   // (no necesariamente la que cerró el mes anterior: depende de cuántos días
@@ -1675,11 +1691,12 @@ function renderProyeccion(){
   if(listaFijos){
     listaFijos.innerHTML=fijosDelMes.length?fijosDelMes.map(f=>{
       const c=getCatFijo(f.cat);
-      const meta=f.frecuencia==='anual'?`Anual · ${MESES_NOMBRE[f.mes]}`:c.nombre;
+      const esTc=fijoEsTarjeta(f);
+      const meta=(f.frecuencia==='anual'?`Anual · ${MESES_NOMBRE[f.mes]}`:c.nombre)+(esTc?' · con tarjeta, no resta este mes':'');
       return`<div class="gasto-item" onclick="switchTab('recurrentes');switchSubvista('recurrentes','fijos')">
         <div class="ico" style="background:${c.color}22">${ic(c.icono)}</div>
         <div class="info"><div class="desc">${f.nombre}</div><div class="meta">${meta}</div></div>
-        <div class="amount" style="color:var(--danger)">-${fmt(f.monto,f.moneda)}</div>
+        <div class="amount"${esTc?'':' style="color:var(--danger)"'}>${esTc?'':'-'}${fmt(f.monto,f.moneda)}</div>
       </div>`;
     }).join(''):
       `<div class="empty"><div class="ico">${ic('car')}</div><p style="font-weight:600;font-size:14px;margin-bottom:4px">Sin gastos fijos cargados</p><p style="font-size:13px">Se cargan en la pestaña Fijos y se descuentan solos acá.</p></div>`;

@@ -294,3 +294,36 @@ test('la lista de cuotas de Proyección usa el mismo ciclo que el pago', async (
   expect(r.cuotaEnLista).toBe(r.cuotaSegunElCiclo);
   expect(r.cuotaEnLista).toBe(5); // cierres 27/5, 27/6, 27/7, 27/8 y 27/9
 });
+
+// Un gasto fijo pagado con tarjeta de crédito (ej: un seguro en débito
+// automático) no puede restar dos veces: no sale de la plata en mano este
+// mes (eso lo cubre "agregar pago real" cuando llega el resumen), pero sí
+// tiene que sumarse al total que se debe de esa tarjeta.
+test('un gasto fijo con tarjeta entra al total de la tarjeta, no al disponible en mano', async ({ page }) => {
+  const r = await page.evaluate(() => {
+    cats.push({ id: 9501, nombre: 'Seguros', icono: 'box', color: '#748ffc', tipo: 'gasto' });
+    tarjetas.push({ id: 9502, nombre: 'Efectivo', icono: 'cash', color: '#63e6be', esTarjeta: false });
+    tarjetas.push({ id: 9503, nombre: 'Visa', icono: 'card', color: '#cc5de8', esTarjeta: true });
+    cierres[9503] = { dia: 27, vencimiento: 8, cicloInicio: '2026-08-28', cicloCierre: '2026-09-27' };
+    gastosFijos.push({ id: 9504, nombre: 'Seguro auto (efectivo)', monto: 20000, moneda: 'ARS',
+                       dia: 10, pago: 9502, cat: 9501, frecuencia: 'mensual', mes: null });
+    gastosFijos.push({ id: 9505, nombre: 'Seguro moto (tarjeta)', monto: 15000, moneda: 'ARS',
+                       dia: 10, pago: 9503, cat: 9501, frecuencia: 'mensual', mes: null });
+
+    const oct = new Date(2026, 9, 20);
+    const totalTarjeta = totalCicloTarjeta(9503, oct);
+    return { totalTarjeta };
+  });
+
+  // El fijo pagado con tarjeta entra al total que se debe de esa tarjeta...
+  expect(r.totalTarjeta).toBe(15000);
+
+  await page.click('#nav-balance');
+  await page.click('#subtab-proyeccion');
+  const texto = await page.locator('#proy-fijos-lista').innerText();
+  // ...y en la lista de Proyección se ve marcado como que no resta este mes,
+  // mientras que el que se paga en efectivo sí resta directo.
+  expect(texto).toContain('con tarjeta, no resta este mes');
+  expect(texto).toContain('-$20.000');
+  expect(texto).not.toContain('-$15.000');
+});
